@@ -1,0 +1,32 @@
+runner: r001
+SINGLE_FOLD: true
+DEVICE: cpu
+split:
+    split_type: skf
+    split_num: 5
+    shuffle: true
+    random_state: 71
+loader:
+    trn_sampler_type: random
+    trn_batch_size: 16
+    tst_sampler_type: sequential
+    tst_batch_size: 16
+dataset:
+    tokenizer_type: bert
+    pretrained_model_name_or_path: bert-base-uncased
+    do_lower_case: true
+    max_length: 250
+model:
+    model_type: bert-segmentation
+    pretrained_model_name_or_path: bert-base-uncased
+    num_labels: 250
+fobj:
+    fobj_type: bce
+optimizer:
+    optim_type: adam
+    lr: 0.001
+scheduler:
+    scheduler_type: cosine
+train:
+    max_epoch: 2
+    warmup_epoch: 2

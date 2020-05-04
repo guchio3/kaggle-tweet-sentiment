@@ -1,0 +1,6 @@
+tags*
+*__pycache__*
+
+notebooks/.ipynb_checkpoints/
+logs/
+inputs/
