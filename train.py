@@ -4,7 +4,7 @@ import random
 import numpy as np
 import torch
 
-from src.args import parse_args
+from tools.args import parse_args
 
 
 def seed_everything(seed):
@@ -27,10 +27,10 @@ if __name__ == '__main__':
     checkpoint = args.checkpoint
     debug = args.debug
     with open(f'{CONFIG_DIR}/{exp_id}.yml', 'r') as fin:
-        config = yaml.load(fin)
+        config = yaml.load(fin, Loader=yaml.SafeLoader)
 
     if config['runner'] == 'r001':
-        from src.runners.r001_first_runner import Runner
+        from tools.runners.r001_first_runner import Runner
     else:
         raise NotImplementedError(f'{config["runner"]} is not implemented.')
     runner = Runner(exp_id, checkpoint, debug, config)

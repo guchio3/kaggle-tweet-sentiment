@@ -1,6 +1,6 @@
 runner: r001
 SINGLE_FOLD: true
-DEVICE: cpu
+DEVICE: cuda
 split:
     split_type: skf
     split_num: 5
@@ -28,5 +28,5 @@ optimizer:
 scheduler:
     scheduler_type: cosine
 train:
-    max_epoch: 2
+    max_epoch: 10
     warmup_epoch: 2

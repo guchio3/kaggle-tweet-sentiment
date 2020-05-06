@@ -14,11 +14,11 @@ from torch.utils.data import DataLoader
 from torch.utils.data.sampler import RandomSampler, SequentialSampler
 from tqdm import tqdm
 
-from src.datasets import TSEDataset
-from src.loggers import myLogger
-from src.models import BertModelWBinaryMultiLabelClassifierHead
-from src.schedulers import pass_scheduler
-from src.splitters import mySplitter
+from tools.datasets import TSEDataset
+from tools.loggers import myLogger
+from tools.models import BertModelWBinaryMultiLabelClassifierHead
+from tools.schedulers import pass_scheduler
+from tools.splitters import mySplitter
 
 random.seed(71)
 torch.manual_seed(71)
@@ -416,10 +416,10 @@ class Runner(object):
     # val_metric):
     def _save_checkpoint(self, fold_num, current_epoch,
                          model, optimizer, scheduler, val_loss):
-        if not os.path.exists(f'./checkpoints/{fold_num}/{self.exp_id}'):
-            os.makedirs(f'./checkpoints/{fold_num}/{self.exp_id}')
+        if not os.path.exists(f'./checkpoints/{self.exp_id}/{fold_num}'):
+            os.makedirs(f'./checkpoints/{self.exp_id}/{fold_num}')
         # pth means pytorch
-        cp_filename = f'./checkpoints/{fold_num}/{self.exp_id}/' \
+        cp_filename = f'./checkpoints/{self.exp_id}/{fold_num}/' \
             f'epoch_{current_epoch}_{val_loss:.5f}' \
             f'_checkpoint.pth'
         # f'_{val_metric:.5f}_checkpoint.pth'
@@ -438,7 +438,7 @@ class Runner(object):
         best_loss = np.inf
         # best_metric = -1
         best_filename = ''
-        for filename in glob(f'./checkpoints/{fold_num}/{self.exp_id}/*'):
+        for filename in glob(f'./checkpoints/{self.exp_id}/{fold_num}/*'):
             split_filename = filename.split('/')[-1].split('_')
             temp_loss = float(split_filename[2])
             # temp_metric = float(split_filename[3])
