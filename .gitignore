@@ -4,3 +4,4 @@ tags*
 notebooks/.ipynb_checkpoints/
 logs/
 inputs/
+checkpoints/

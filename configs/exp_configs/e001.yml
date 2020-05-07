@@ -8,9 +8,9 @@ split:
     random_state: 71
 loader:
     trn_sampler_type: random
-    trn_batch_size: 16
+    trn_batch_size: 48
     tst_sampler_type: sequential
-    tst_batch_size: 16
+    tst_batch_size: 48
 dataset:
     tokenizer_type: bert
     pretrained_model_name_or_path: bert-base-uncased
@@ -24,9 +24,11 @@ fobj:
     fobj_type: bce
 optimizer:
     optim_type: adam
-    lr: 0.001
+    lr: 0.0001
 scheduler:
     scheduler_type: cosine
 train:
-    max_epoch: 10
-    warmup_epoch: 2
+    max_epoch: 5
+    warmup_epoch: 1
+invalid_labels:
+    - ./inputs/nes_info/invalid_labels.csv

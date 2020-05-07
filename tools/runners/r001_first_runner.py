@@ -7,18 +7,18 @@ from glob import glob
 
 import numpy as np
 import pandas as pd
-import torch
-import torch.optim as optim
-from torch.nn import BCEWithLogitsLoss, Sigmoid
-from torch.utils.data import DataLoader
-from torch.utils.data.sampler import RandomSampler, SequentialSampler
 from tqdm import tqdm
 
+import torch
+import torch.optim as optim
 from tools.datasets import TSEDataset
 from tools.loggers import myLogger
 from tools.models import BertModelWBinaryMultiLabelClassifierHead
 from tools.schedulers import pass_scheduler
 from tools.splitters import mySplitter
+from torch.nn import BCEWithLogitsLoss, Sigmoid
+from torch.utils.data import DataLoader
+from torch.utils.data.sampler import RandomSampler, SequentialSampler
 
 random.seed(71)
 torch.manual_seed(71)
@@ -53,6 +53,8 @@ class Runner(object):
         self.cfg_optimizer = config['optimizer']
         self.cfg_scheduler = config['scheduler']
         self.cfg_train = config['train']
+        self.cfg_invalid_labels = config['invalid_labels'] \
+            if 'invalid_labels' in config else None
 
         self.histories = {
             'train_loss': [],
@@ -61,9 +63,19 @@ class Runner(object):
         }
 
     def train(self):
-        # split data
+        # load and preprocess train.csv
         trn_df = pd.read_csv('./inputs/origin/train.csv')
         trn_df = trn_df[trn_df.text.notnull()].reset_index(drop=True)
+        if self.cfg_invalid_labels:
+            trn_df = trn_df.set_index('textID')
+            for invalid_label_csv in self.cfg_invalid_labels:
+                invalid_label_df = pd.read_csv(invalid_label_csv)
+                for i, row in invalid_label_df.iterrows():
+                    trn_df.loc[row['textID'], 'selected_text'] = \
+                        row['guchio_selected_text']
+            trn_df = trn_df.reset_index()
+
+        # split data
         splitter = mySplitter(**self.cfg_split, logger=self.logger)
         fold = splitter.split(
             trn_df['textID'],

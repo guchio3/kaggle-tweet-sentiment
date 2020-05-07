@@ -3,8 +3,8 @@ services:
     shell:
         build: .
         volumes:
-            - $PWD:/root/workspace
-        working_dir: /root/workspace
+            - $PWD:/home/workspace
+        working_dir: /home/workspace
         runtime: nvidia
         ipc: host
         environment:
@@ -14,8 +14,8 @@ services:
     python:
         build: .
         volumes:
-            - $PWD:/root/workspace
-        working_dir: /root/workspace
+            - $PWD:/home/workspace
+        working_dir: /home/workspace
         runtime: nvidia
         ipc: host
         environment:
@@ -25,8 +25,8 @@ services:
     jn:
         build: .
         volumes:
-            - $PWD:/root/workspace
-        working_dir: /root/workspace/notebooks
+            - $PWD:/home/workspace
+        working_dir: /home/workspace/notebooks
         runtime: nvidia
         ipc: host
         environment:
