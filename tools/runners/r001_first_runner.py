@@ -151,7 +151,7 @@ class Runner(object):
                 self._warmup(current_epoch, self.cfg_train['warmup_epoch'],
                              model)
                 trn_loss = self._train_loop(model, optimizer, fobj, trn_loader)
-                val_loss, val_textIDs, best_thresh, best_jaccard, \
+                val_loss, best_thresh, best_jaccard, val_textIDs, \
                     val_input_ids, val_preds, val_labels = \
                     self._valid_loop(model, fobj, val_loader)
                 epoch_best_jaccard = max(epoch_best_jaccard, best_jaccard)
@@ -404,7 +404,8 @@ class Runner(object):
             # )
 
             best_thresh, best_jaccard = \
-                self._calc_best_threshold_for_jaccard(valid_labels,
+                self._calc_best_threshold_for_jaccard(valid_input_ids,
+                                                      valid_labels.bool(),
                                                       valid_preds,
                                                       loader.dataset.tokenizer)
 
@@ -448,23 +449,27 @@ class Runner(object):
         predicted_text = tokenizer.decode(selected_ids)
         return predicted_text
 
-    def _calc_best_threshold_for_jaccard(self, selected_texts,
+    def _calc_best_threshold_for_jaccard(self, input_ids, selected_text_masks,
                                          y_preds, tokenizer):
+        input_ids = input_ids.to(self.device)
+        selected_text_masks = selected_text_masks.to(self.device)
+        y_preds = y_preds.to(self.device)
+
         best_thresh = -1
         best_jaccard = -1
 
         self.logger.info('now calcurating the best threshold for jaccard ...')
-        for thresh in np.arange(0.1, 1.0, 0.01):
+        for thresh in tqdm(list(np.arange(0.1, 1.0, 0.01))):
             # get predicted texts
-            predicted_texts = [
-                self._get_predicted_text(y_pred, thresh, tokenizer)
-                for y_pred in y_preds]
+            predicted_text_masks = [y_pred > thresh for y_pred in y_preds]
             # calc jaccard for this threshold
             temp_jaccard = 0
-            for selected_text, predicted_text in zip(
-                    selected_texts, predicted_texts):
+            for input_id, selected_text_mask, predicted_text_mask in zip(
+                    input_ids, selected_text_masks, predicted_text_masks):
+                selected_text = tokenizer.decode(input_id[selected_text_mask])
+                predicted_text = tokenizer.decode(input_id[predicted_text_mask])
                 temp_jaccard += jaccard(selected_text, predicted_text)
-            temp_jaccard /= len(selected_texts)
+            temp_jaccard /= len(selected_text_masks)
             # update the best jaccard
             if temp_jaccard > best_jaccard:
                 best_thresh = thresh
@@ -472,6 +477,11 @@ class Runner(object):
 
         assert best_thresh != -1
         assert best_jaccard != -1
+
+        input_ids = input_ids.to('cpu')
+        selected_text_masks = selected_text_masks.to('cpu')
+        y_preds = y_preds.to('cpu')
+
         return best_thresh, best_jaccard
 
     def _save_checkpoint(self, fold_num, current_epoch,
