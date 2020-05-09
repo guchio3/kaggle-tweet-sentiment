@@ -1,5 +1,5 @@
 import datetime
-import gc
+import itertools
 import os
 import random
 import time
@@ -7,31 +7,33 @@ from glob import glob
 
 import numpy as np
 import pandas as pd
-from tqdm import tqdm
-
 import torch
 import torch.optim as optim
-from tools.datasets import TSEDataset
-from tools.loggers import myLogger
-from tools.models import BertModelWBinaryMultiLabelClassifierHead
-from tools.schedulers import pass_scheduler
-from tools.splitters import mySplitter
 from torch.nn import BCEWithLogitsLoss, Sigmoid
 from torch.utils.data import DataLoader
 from torch.utils.data.sampler import RandomSampler, SequentialSampler
+from tqdm import tqdm
+
+from tools.datasets import TSEDataset
+from tools.loggers import myLogger
+from tools.metrics import jaccard
+from tools.models import BertModelWBinaryMultiLabelClassifierHead
+from tools.schedulers import pass_scheduler
+from tools.splitters import mySplitter
 
 random.seed(71)
 torch.manual_seed(71)
 
 
 class Runner(object):
-    def __init__(self, exp_id, checkpoint, debug, config):
+    def __init__(self, exp_id, checkpoint, device, debug, config):
         # set logger
         self.exp_time = datetime\
             .datetime.now()\
             .strftime('%Y-%m-%d-%H-%M-%S')
         self.exp_id = exp_id
         self.checkpoint = checkpoint
+        self.device = device
         self.debug = debug
         self.logger = myLogger(f'./logs/{self.exp_id}_{self.exp_time}.log')
         self.logger.info(f'exp_id: {exp_id}')
@@ -42,7 +44,6 @@ class Runner(object):
         # unpack config info
         # uppercase means raaaw value
         self.cfg_SINGLE_FOLD = config['SINGLE_FOLD']
-        self.cfg_DEVICE = config['DEVICE']
         # self.cfg_batch_size = config['batch_size']
         # self.cfg_max_epoch = config['max_epoch']
         self.cfg_split = config['split']
@@ -137,6 +138,7 @@ class Runner(object):
                 scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
 
             epoch_start_time = time.time()
+            epoch_best_jaccard = -1
             self.logger.info('start trainging !')
             for current_epoch in iter_epochs:
                 if self.checkpoint and current_epoch <= checkpoint_epoch:
@@ -144,20 +146,22 @@ class Runner(object):
 
                 start_time = time.time()
                 # send to device
-                model = model.to(self.cfg_DEVICE)
-                # optimizer = optimizer.to(self.cfg_DEVICE)
-                # scheduler = scheduler.to(self.cfg_DEVICE)
+                model = model.to(self.device)
 
                 self._warmup(current_epoch, self.cfg_train['warmup_epoch'],
                              model)
                 trn_loss = self._train_loop(model, optimizer, fobj, trn_loader)
-                val_loss, val_preds, val_labels = self._valid_loop(
-                    model, fobj, val_loader)
+                val_loss, val_textIDs, best_thresh, best_jaccard, \
+                    val_input_ids, val_preds, val_labels = \
+                    self._valid_loop(model, fobj, val_loader)
+                epoch_best_jaccard = max(epoch_best_jaccard, best_jaccard)
 
                 self.logger.info(
                     f'epoch: {current_epoch} / '
                     + f'trn loss: {trn_loss:.5f} / '
                     + f'val loss: {val_loss:.5f} / '
+                    + f'best val thresh: {best_thresh:.5f} / '
+                    + f'best val jaccard: {best_jaccard:.5f} / '
                     + f'lr: {optimizer.param_groups[0]["lr"]:.5f} / '
                     + f'time: {int(time.time()-start_time)}sec')
 
@@ -169,14 +173,16 @@ class Runner(object):
 
                 # send to cpu
                 model = model.to('cpu')
-                # optimizer = optimizer.to('cpu')
-                # scheduler = scheduler.to('cpu')
 
                 self._save_checkpoint(fold_num, current_epoch,
-                                      model, optimizer, scheduler, val_loss)  # , val_jac)
+                                      model, optimizer, scheduler,
+                                      val_textIDs, val_input_ids, val_preds,
+                                      val_labels, val_loss,
+                                      best_thresh, best_jaccard)
 
             fold_time = int(time.time() - epoch_start_time) // 60
-            line_message = f'fini fold {fold_num} in {fold_time} min'
+            line_message = f'fini fold {fold_num} in {fold_time} min. \n' \
+                f'epoch best jaccard: {epoch_best_jaccard}'
             self.logger.send_line_notification(line_message)
 
             if self.cfg_SINGLE_FOLD:
@@ -225,7 +231,6 @@ class Runner(object):
         else:
             raise Exception(f'invalid model_type: {model_type}')
         return torch.nn.DataParallel(model)
-        # return torch.nn.DataParallel(model.to(self.device))
 
     def _get_optimizer(self, optim_type, lr, model):
         if optim_type == 'sgd':
@@ -332,9 +337,9 @@ class Runner(object):
         running_loss = 0
 
         for batch in tqdm(loader):
-            input_ids = batch['input_ids'].to(self.cfg_DEVICE)
-            labels = batch['labels'].to(self.cfg_DEVICE)
-            attention_mask = batch['attention_mask'].to(self.cfg_DEVICE)
+            input_ids = batch['input_ids'].to(self.device)
+            labels = batch['labels'].to(self.device)
+            attention_mask = batch['attention_mask'].to(self.device)
 
             (logits, ) = model(
                 input_ids=input_ids,
@@ -360,12 +365,15 @@ class Runner(object):
         sigmoid = Sigmoid()
         running_loss = 0
 
+        valid_textIDs_list = []
         with torch.no_grad():
-            valid_preds, valid_labels = [], []
+            valid_textIDs, valid_input_ids, valid_preds, valid_labels \
+                = [], [], [], []
             for batch in tqdm(loader):
-                input_ids = batch['input_ids'].to(self.cfg_DEVICE)
-                labels = batch['labels'].to(self.cfg_DEVICE)
-                attention_mask = batch['attention_mask'].to(self.cfg_DEVICE)
+                textIDs = batch['textID']
+                input_ids = batch['input_ids'].to(self.device)
+                labels = batch['labels'].to(self.device)
+                attention_mask = batch['attention_mask'].to(self.device)
 
                 (logits, ) = model(
                     input_ids=input_ids,
@@ -379,18 +387,29 @@ class Runner(object):
                 # _, predicted = torch.max(outputs.data, 1)
                 predicted = sigmoid(logits.data)
 
+                valid_textIDs_list.append(textIDs)
+                valid_input_ids.append(input_ids.cpu())
                 valid_preds.append(predicted.cpu())
                 valid_labels.append(labels.cpu())
 
             valid_loss = running_loss / len(loader)
 
+            valid_textIDs = list(
+                itertools.chain.from_iterable(valid_textIDs_list))
+            valid_input_ids = torch.cat(valid_input_ids)
             valid_preds = torch.cat(valid_preds)
             valid_labels = torch.cat(valid_labels)
             # valid_jac = self._calc_jac(
             #     valid_preds, valid_labels
             # )
 
-        return valid_loss, valid_preds, valid_labels  # , valid_accuracy
+            best_thresh, best_jaccard = \
+                self._calc_best_threshold_for_jaccard(valid_labels,
+                                                      valid_preds,
+                                                      loader.dataset.tokenizer)
+
+        return valid_loss, best_thresh, best_jaccard, valid_textIDs, \
+            valid_input_ids, valid_preds, valid_labels
 
     # def _test_loop(self, loader):
     #     self.model.eval()
@@ -424,16 +443,47 @@ class Runner(object):
 
     #     return test_ids, test_preds
 
-    # def _save_checkpoint(self, fold_num, current_epoch, val_loss,
-    # val_metric):
+    def _get_predicted_text(self, y_pred, thresh, tokenizer):
+        selected_ids = y_pred[y_pred > thresh]
+        predicted_text = tokenizer.decode(selected_ids)
+        return predicted_text
+
+    def _calc_best_threshold_for_jaccard(self, selected_texts,
+                                         y_preds, tokenizer):
+        best_thresh = -1
+        best_jaccard = -1
+
+        self.logger.info('now calcurating the best threshold for jaccard ...')
+        for thresh in np.arange(0.1, 1.0, 0.01):
+            # get predicted texts
+            predicted_texts = [
+                self._get_predicted_text(y_pred, thresh, tokenizer)
+                for y_pred in y_preds]
+            # calc jaccard for this threshold
+            temp_jaccard = 0
+            for selected_text, predicted_text in zip(
+                    selected_texts, predicted_texts):
+                temp_jaccard += jaccard(selected_text, predicted_text)
+            temp_jaccard /= len(selected_texts)
+            # update the best jaccard
+            if temp_jaccard > best_jaccard:
+                best_thresh = thresh
+                best_jaccard = temp_jaccard
+
+        assert best_thresh != -1
+        assert best_jaccard != -1
+        return best_thresh, best_jaccard
+
     def _save_checkpoint(self, fold_num, current_epoch,
-                         model, optimizer, scheduler, val_loss):
+                         model, optimizer, scheduler,
+                         val_textIDs, val_input_ids, val_preds, val_labels,
+                         val_loss, best_thresh, best_jaccard):
         if not os.path.exists(f'./checkpoints/{self.exp_id}/{fold_num}'):
             os.makedirs(f'./checkpoints/{self.exp_id}/{fold_num}')
         # pth means pytorch
         cp_filename = f'./checkpoints/{self.exp_id}/{fold_num}/' \
-            f'epoch_{current_epoch}_{val_loss:.5f}' \
-            f'_checkpoint.pth'
+            f'epoch_{current_epoch}_{val_loss:.5f}_{best_thresh:.5f}' \
+            f'_{best_jaccard:.5f}_checkpoint.pth'
         # f'_{val_metric:.5f}_checkpoint.pth'
         cp_dict = {
             'fold_num': fold_num,
@@ -441,6 +491,10 @@ class Runner(object):
             'model_state_dict': model.module.state_dict(),
             'optimizer_state_dict': optimizer.state_dict(),
             'scheduler_state_dict': scheduler.state_dict(),
+            'val_textIDs': val_textIDs,
+            'val_input_ids': val_input_ids,
+            'val_preds': val_preds,
+            'val_labels': val_labels,
             'histories': self.histories,
         }
         self.logger.info(f'now saving checkpoint to {cp_filename} ...')

@@ -25,6 +25,7 @@ if __name__ == '__main__':
     args = parse_args(None)
     exp_id = args.exp_id
     checkpoint = args.checkpoint
+    device = args.device
     debug = args.debug
     with open(f'{CONFIG_DIR}/{exp_id}.yml', 'r') as fin:
         config = yaml.load(fin, Loader=yaml.SafeLoader)
@@ -33,5 +34,5 @@ if __name__ == '__main__':
         from tools.runners.r001_first_runner import Runner
     else:
         raise NotImplementedError(f'{config["runner"]} is not implemented.')
-    runner = Runner(exp_id, checkpoint, debug, config)
+    runner = Runner(exp_id, checkpoint, device, debug, config)
     runner.train()

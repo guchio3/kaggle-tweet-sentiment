@@ -1,6 +1,5 @@
 runner: r001
 SINGLE_FOLD: true
-DEVICE: cuda
 split:
     split_type: skf
     split_num: 5
@@ -31,4 +30,4 @@ train:
     max_epoch: 5
     warmup_epoch: 1
 invalid_labels:
-    - ./inputs/nes_info/invalid_labels.csv
+    # - ./inputs/nes_info/invalid_labels.csv

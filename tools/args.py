@@ -23,7 +23,12 @@ def parse_args(logger=None):
                         type=str,
                         required=False,
                         default=None)
-    parser.add_argument('-d', '--debug',
+    parser.add_argument('-d', '--device',
+                        help='cpu or cuda, the device for running the model',
+                        type=str,
+                        required=False,
+                        default='cuda')
+    parser.add_argument('--debug',
                         help='whether or not to use debug mode',
                         action='store_true',
                         default=False)
