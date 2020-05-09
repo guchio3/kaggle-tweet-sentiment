@@ -7,19 +7,19 @@ from glob import glob
 
 import numpy as np
 import pandas as pd
-import torch
-import torch.optim as optim
-from torch.nn import BCEWithLogitsLoss, Sigmoid
-from torch.utils.data import DataLoader
-from torch.utils.data.sampler import RandomSampler, SequentialSampler
 from tqdm import tqdm
 
+import torch
+import torch.optim as optim
 from tools.datasets import TSEDataset
 from tools.loggers import myLogger
 from tools.metrics import jaccard
 from tools.models import BertModelWBinaryMultiLabelClassifierHead
 from tools.schedulers import pass_scheduler
 from tools.splitters import mySplitter
+from torch.nn import BCEWithLogitsLoss, Sigmoid
+from torch.utils.data import DataLoader
+from torch.utils.data.sampler import RandomSampler, SequentialSampler
 
 random.seed(71)
 torch.manual_seed(71)
@@ -407,7 +407,8 @@ class Runner(object):
                 self._calc_best_threshold_for_jaccard(valid_input_ids,
                                                       valid_labels.bool(),
                                                       valid_preds,
-                                                      loader.dataset.tokenizer)
+                                                      loader.dataset.tokenizer,
+                                                      self.cfg_train['thresh_unit'])
 
         return valid_loss, best_thresh, best_jaccard, valid_textIDs, \
             valid_input_ids, valid_preds, valid_labels
@@ -450,16 +451,12 @@ class Runner(object):
         return predicted_text
 
     def _calc_best_threshold_for_jaccard(self, input_ids, selected_text_masks,
-                                         y_preds, tokenizer):
-        input_ids = input_ids.to(self.device)
-        selected_text_masks = selected_text_masks.to(self.device)
-        y_preds = y_preds.to(self.device)
-
+                                         y_preds, tokenizer, thresh_unit):
         best_thresh = -1
         best_jaccard = -1
 
         self.logger.info('now calcurating the best threshold for jaccard ...')
-        for thresh in tqdm(list(np.arange(0.1, 1.0, 0.01))):
+        for thresh in tqdm(list(np.arange(0.1, 1.0, thresh_unit))):
             # get predicted texts
             predicted_text_masks = [y_pred > thresh for y_pred in y_preds]
             # calc jaccard for this threshold
@@ -467,8 +464,17 @@ class Runner(object):
             for input_id, selected_text_mask, predicted_text_mask in zip(
                     input_ids, selected_text_masks, predicted_text_masks):
                 selected_text = tokenizer.decode(input_id[selected_text_mask])
-                predicted_text = tokenizer.decode(input_id[predicted_text_mask])
+                # fill continuous zeros between one
+                _non_zeros = predicted_text_mask.nonzero()
+                if _non_zeros.shape[0] > 0:
+                    _predicted_text_mask_min = _non_zeros.min()
+                    _predicted_text_mask_max = _non_zeros.max()
+                    predicted_text_mask[_predicted_text_mask_min:
+                                        _predicted_text_mask_max + 1] = True
+                predicted_text = tokenizer.decode(
+                    input_id[predicted_text_mask])
                 temp_jaccard += jaccard(selected_text, predicted_text)
+
             temp_jaccard /= len(selected_text_masks)
             # update the best jaccard
             if temp_jaccard > best_jaccard:
@@ -477,10 +483,6 @@ class Runner(object):
 
         assert best_thresh != -1
         assert best_jaccard != -1
-
-        input_ids = input_ids.to('cpu')
-        selected_text_masks = selected_text_masks.to('cpu')
-        y_preds = y_preds.to('cpu')
 
         return best_thresh, best_jaccard
 
