@@ -1,13 +1,11 @@
+from abc import ABCMeta, abstractmethod
+
 import numpy as np
 import pandas as pd
 import torch
 from torch.utils.data import Dataset
 from tqdm import tqdm
 from transformers import BertTokenizer
-
-# from functools import partial
-# from itertools import chain
-# from multiprocessing import Pool
 
 
 class TSEDataset(Dataset):
@@ -52,6 +50,12 @@ class TSEDataset(Dataset):
             'attention_mask': torch.tensor(row['attention_mask']),
         }
 
+    @abstractmethod
+    def _prep_text(self, row):
+        raise NotImplementedError()
+
+
+class TSESegmentationDataset(TSEDataset):
     def _prep_text(self, row):
         text_output = self.tokenizer.encode_plus(
             text=row['text'],
@@ -116,7 +120,71 @@ class TSEDataset(Dataset):
             print('===============================')
             print(input_ids)
             print(sel_input_ids)
-            ### raise Exception('selected text completely did not found.')
+
+        labels = np.zeros(len(input_ids))
+        labels[list(range(best_matched_i,
+                          best_matched_i + len(sel_input_ids)))] = 1
+
+        row['input_ids'] = text_output['input_ids']
+        row['labels'] = labels
+        row['attention_mask'] = text_output['attention_mask']
+        return row
+
+
+class TSEHeadTailDataset(TSEDataset):
+    def _prep_text(self, row):
+        text_output = self.tokenizer.encode_plus(
+            text=row['text'],
+            text_pair=None,
+            add_special_tokens=True,
+            max_length=self.max_length,
+            pad_to_max_length=True,
+            return_tensor='pt',
+            return_token_type_ids=False,
+            return_attention_mask=True,
+        )
+        selected_text_output = self.tokenizer.encode_plus(
+            text=row['selected_text'],
+            text_pair=None,
+            add_special_tokens=False,
+            max_length=self.max_length,
+            pad_to_max_length=False,
+            return_tensor='pt',
+            return_token_type_ids=False,
+            return_attention_mask=False,
+        )
+
+        # allign labels for segmentation
+        input_ids = text_output['input_ids']
+        sel_input_ids = selected_text_output['input_ids']
+        matched_cnt = len([i for i in input_ids[:len(sel_input_ids)]
+                           if i in sel_input_ids])
+        best_matched_cnt = len([i for i in input_ids[:len(sel_input_ids)]
+                                if i in sel_input_ids])
+        best_matched_i = 0
+        # for i in range(0, len(input_ids)):
+        for i in range(0, len(input_ids) - len(sel_input_ids)):
+            head_input_id_i = input_ids[i]
+            tail_input_id_i = input_ids[i + len(sel_input_ids)]
+            if head_input_id_i in sel_input_ids:
+                matched_cnt -= 1
+            if tail_input_id_i in sel_input_ids:
+                matched_cnt += 1
+            if matched_cnt < 0:
+                raise Exception('invalid logic')
+
+            if best_matched_cnt < matched_cnt:
+                best_matched_cnt = matched_cnt
+                best_matched_i = i + 1   # 抜いた時の話なので
+            if best_matched_cnt == len(sel_input_ids):
+                break
+
+        if best_matched_cnt == 0:
+            print('===============================')
+            print(row)
+            print('===============================')
+            print(input_ids)
+            print(sel_input_ids)
 
         labels = np.zeros(len(input_ids))
         labels[list(range(best_matched_i,
