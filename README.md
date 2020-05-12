@@ -1,9 +1,9 @@
 ## kaggle-tweet-sentiment
 
-## $BJ}?K(B
+## 方針
  - runners
-     - $B5!G=DI2C$OIaDL$K9T$&(B
-     - $B8eJ}8_49@-$NL5$$JQ99$r9T$&$J$i?7(B class $B$H$7$FDj5A(B
+     - 機能追加は普通に行う
+     - 後方互換性の無い変更を行うなら新 class として定義
 
 ## usage
  1. run commands
