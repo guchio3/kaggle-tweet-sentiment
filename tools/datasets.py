@@ -186,11 +186,8 @@ class TSEHeadTailDataset(TSEDataset):
             print(input_ids)
             print(sel_input_ids)
 
-        labels = np.zeros(len(input_ids))
-        labels[list(range(best_matched_i,
-                          best_matched_i + len(sel_input_ids)))] = 1
-
         row['input_ids'] = text_output['input_ids']
-        row['labels'] = labels
+        row['labels_head'] = best_matched_i
+        row['labels_tail'] = best_matched_i + len(sel_input_ids) + 1
         row['attention_mask'] = text_output['attention_mask']
         return row

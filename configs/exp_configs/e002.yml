@@ -16,11 +16,11 @@ dataset:
     do_lower_case: true
     max_length: 250
 model:
-    model_type: bert-segmentation
+    model_type: bert-headtail
     pretrained_model_name_or_path: bert-base-uncased
     num_output_units: 250
 fobj:
-    fobj_type: bce
+    fobj_type: ce
 optimizer:
     optim_type: adam
     lr: 0.0001

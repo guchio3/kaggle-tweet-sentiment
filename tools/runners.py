@@ -7,19 +7,20 @@ from glob import glob
 
 import numpy as np
 import pandas as pd
-from tqdm import tqdm
-
 import torch
 import torch.optim as optim
-from tools.datasets import TSESegmentationDataset, TSEHeadTailDataset
-from tools.loggers import myLogger
-from tools.metrics import jaccard
-from tools.models import BertModelWBinaryMultiLabelClassifierHead, BertModelWDualMultiClassClassifierHead
-from tools.schedulers import pass_scheduler
-from tools.splitters import mySplitter
-from torch.nn import BCEWithLogitsLoss, Sigmoid
+from torch.nn import BCEWithLogitsLoss, CrossEntropyLoss, Sigmoid, Softmax
 from torch.utils.data import DataLoader
 from torch.utils.data.sampler import RandomSampler, SequentialSampler
+from tqdm import tqdm
+
+from tools.datasets import TSEHeadTailDataset, TSESegmentationDataset
+from tools.loggers import myLogger
+from tools.metrics import jaccard
+from tools.models import (BertModelWBinaryMultiLabelClassifierHead,
+                          BertModelWDualMultiClassClassifierHead)
+from tools.schedulers import pass_scheduler
+from tools.splitters import mySplitter
 
 random.seed(71)
 torch.manual_seed(71)
@@ -192,6 +193,8 @@ class Runner(object):
     def _get_fobj(self, fobj_type):
         if fobj_type == 'bce':
             fobj = BCEWithLogitsLoss()
+        elif fobj_type == 'ce':
+            fobj = CrossEntropyLoss()
         else:
             raise Exception(f'invalid fobj_type: {fobj_type}')
         return fobj
@@ -436,7 +439,6 @@ class r001SegmentationRunner(Runner):
 
                 (logits, ) = model(
                     input_ids=input_ids,
-                    labels=labels,
                     attention_mask=attention_mask,
                 )
 
@@ -541,8 +543,7 @@ class r001SegmentationRunner(Runner):
         return best_thresh, best_jaccard
 
 
-
-class r001HeadTailRunner(Runner):
+class r002HeadTailRunner(Runner):
     def __init__(self, exp_id, checkpoint, device, debug, config):
         super().__init__(exp_id, checkpoint, device, debug, config,
                          TSEHeadTailDataset)
@@ -575,53 +576,63 @@ class r001HeadTailRunner(Runner):
 
     def _valid_loop(self, model, fobj, loader):
         model.eval()
-        sigmoid = Sigmoid()
+        softmax = Softmax()
         running_loss = 0
 
         valid_textIDs_list = []
         with torch.no_grad():
-            valid_textIDs, valid_input_ids, valid_preds, valid_labels \
-                = [], [], [], []
+            valid_textIDs, valid_input_ids = [], []
+            valid_preds_head, valid_preds_tail = [], []
+            valid_labels_head, valid_labels_tail = [], []
             for batch in tqdm(loader):
                 textIDs = batch['textID']
                 input_ids = batch['input_ids'].to(self.device)
-                labels = batch['labels'].to(self.device)
+                labels_head = batch['labels_head'].to(self.device)
+                labels_tail = batch['labels_tail'].to(self.device)
                 attention_mask = batch['attention_mask'].to(self.device)
 
                 (logits, ) = model(
                     input_ids=input_ids,
-                    labels=labels,
                     attention_mask=attention_mask,
                 )
+                logits_head, logits_tail = logits
 
-                valid_loss = fobj(logits, labels)
+                valid_loss = fobj(logits_head, labels_head)
+                valid_loss += fobj(logits_tail, labels_tail)
                 running_loss += valid_loss.item()
 
                 # _, predicted = torch.max(outputs.data, 1)
-                predicted = sigmoid(logits.data)
+                predicted_head = softmax(logits_head.data)
+                predicted_tail = softmax(logits_tail.data)
 
                 valid_textIDs_list.append(textIDs)
                 valid_input_ids.append(input_ids.cpu())
-                valid_preds.append(predicted.cpu())
-                valid_labels.append(labels.cpu())
+                valid_preds_head.append(predicted_head.cpu())
+                valid_preds_tail.append(predicted_tail.cpu())
+                valid_labels_head.append(labels_head.cpu())
+                valid_labels_tail.append(labels_tail.cpu())
 
             valid_loss = running_loss / len(loader)
 
             valid_textIDs = list(
                 itertools.chain.from_iterable(valid_textIDs_list))
             valid_input_ids = torch.cat(valid_input_ids)
-            valid_preds = torch.cat(valid_preds)
-            valid_labels = torch.cat(valid_labels)
-            # valid_jac = self._calc_jac(
-            #     valid_preds, valid_labels
-            # )
+            valid_preds_head = torch.cat(valid_preds_head)
+            valid_preds_tail = torch.cat(valid_preds_tail)
+            valid_labels_head = torch.cat(valid_labels_head)
+            valid_labels_tail = torch.cat(valid_labels_tail)
 
             best_thresh, best_jaccard = \
                 self._calc_jaccard(valid_input_ids,
-                                   valid_labels.bool(),
-                                   valid_preds,
+                                   valid_labels_head,
+                                   valid_labels_tail,
+                                   valid_preds_head,
+                                   valid_preds_tail,
                                    loader.dataset.tokenizer,
                                    self.cfg_train['thresh_unit'])
+
+        valid_preds = (valid_preds_head, valid_preds_tail)
+        valid_labels = (valid_labels_head, valid_labels_tail)
 
         return valid_loss, best_thresh, best_jaccard, valid_textIDs, \
             valid_input_ids, valid_preds, valid_labels
@@ -658,38 +669,21 @@ class r001HeadTailRunner(Runner):
 
     #     return test_ids, test_preds
 
-    def _calc_jaccard(self, input_ids, selected_text_masks,
-                      y_preds, tokenizer, thresh_unit):
+    def _calc_jaccard(self, input_ids, labels_head, labels_tail,
+                      y_preds_head, y_preds_tail, tokenizer, thresh_unit):
+
+        temp_jaccard = 0
+        for input_id, label_head, label_tail, y_pred_head, y_pred_tail in zip(
+                input_ids, labels_head, labels_tail, y_preds_head, y_preds_tail):
+            selected_text = tokenizer.decode(
+                input_id[label_head:label_tail + 1])
+            pred_label_head = y_pred_head.argmax()
+            pred_label_tail = y_pred_tail.argmax()
+            predicted_text = tokenizer.decode(
+                input_id[pred_label_head:pred_label_tail + 1])
+            temp_jaccard += jaccard(selected_text, predicted_text)
+
         best_thresh = -1
-        best_jaccard = -1
-
-        self.logger.info('now calcurating the best threshold for jaccard ...')
-        for thresh in tqdm(list(np.arange(0.1, 1.0, thresh_unit))):
-            # get predicted texts
-            predicted_text_masks = [y_pred > thresh for y_pred in y_preds]
-            # calc jaccard for this threshold
-            temp_jaccard = 0
-            for input_id, selected_text_mask, predicted_text_mask in zip(
-                    input_ids, selected_text_masks, predicted_text_masks):
-                selected_text = tokenizer.decode(input_id[selected_text_mask])
-                # fill continuous zeros between one
-                _non_zeros = predicted_text_mask.nonzero()
-                if _non_zeros.shape[0] > 0:
-                    _predicted_text_mask_min = _non_zeros.min()
-                    _predicted_text_mask_max = _non_zeros.max()
-                    predicted_text_mask[_predicted_text_mask_min:
-                                        _predicted_text_mask_max + 1] = True
-                predicted_text = tokenizer.decode(
-                    input_id[predicted_text_mask])
-                temp_jaccard += jaccard(selected_text, predicted_text)
-
-            temp_jaccard /= len(selected_text_masks)
-            # update the best jaccard
-            if temp_jaccard > best_jaccard:
-                best_thresh = thresh
-                best_jaccard = temp_jaccard
-
-        assert best_thresh != -1
-        assert best_jaccard != -1
+        best_jaccard = temp_jaccard / len()
 
         return best_thresh, best_jaccard

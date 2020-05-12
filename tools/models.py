@@ -18,7 +18,7 @@ class BertModelWBinaryMultiLabelClassifierHead(nn.Module):
             self.model.pooler.dense.out_features, num_labels)
         self.add_module('fc_output', self.classifier)
 
-    def forward(self, input_ids=None, labels=None, attention_mask=None,
+    def forward(self, input_ids=None, attention_mask=None,
                 token_type_ids=None, position_ids=None, head_mask=None,
                 inputs_embeds=None, encoder_hidden_states=None,
                 encoder_attention_mask=None):
@@ -66,7 +66,7 @@ class BertModelWDualMultiClassClassifierHead(nn.Module):
         self.add_module('fc_output_head', self.classifier_head)
         self.add_module('fc_output_tail', self.classifier_tail)
 
-    def forward(self, input_ids=None, labels=None, attention_mask=None,
+    def forward(self, input_ids=None, attention_mask=None,
                 token_type_ids=None, position_ids=None, head_mask=None,
                 inputs_embeds=None, encoder_hidden_states=None,
                 encoder_attention_mask=None):
