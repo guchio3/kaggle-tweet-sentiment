@@ -579,7 +579,7 @@ class r002HeadTailRunner(Runner):
 
         model = model.to(self.device)
 
-        textIDs, predicted_texts = self._test_loop(model, model, tst_loader)
+        textIDs, predicted_texts = self._test_loop(model, tst_loader)
 
         return textIDs, predicted_texts
 
