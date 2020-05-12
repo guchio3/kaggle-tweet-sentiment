@@ -315,34 +315,6 @@ class Runner(object):
                 for param in child.parameters():
                     param.requires_grad = True
 
-    def _train_loop(self, model, optimizer, fobj, loader):
-        model.train()
-        running_loss = 0
-
-        for batch in tqdm(loader):
-            input_ids = batch['input_ids'].to(self.device)
-            labels = batch['labels'].to(self.device)
-            attention_mask = batch['attention_mask'].to(self.device)
-
-            (logits, ) = model(
-                input_ids=input_ids,
-                labels=labels,
-                attention_mask=attention_mask,
-            )
-
-            train_loss = fobj(logits, labels)
-
-            optimizer.zero_grad()
-            train_loss.backward()
-
-            optimizer.step()
-
-            running_loss += train_loss.item()
-
-        train_loss = running_loss / len(loader)
-
-        return train_loss
-
     def _save_checkpoint(self, fold_num, current_epoch,
                          model, optimizer, scheduler,
                          val_textIDs, val_input_ids, val_preds, val_labels,
@@ -421,6 +393,34 @@ class r001SegmentationRunner(Runner):
     #         f'Best valid loss : {best_loss:.5f} \n' \
     #         f'Best valid acc : {best_acc:.5f}'
     #     self.logger.send_line_notification(line_message)
+
+    def _train_loop(self, model, optimizer, fobj, loader):
+        model.train()
+        running_loss = 0
+
+        for batch in tqdm(loader):
+            input_ids = batch['input_ids'].to(self.device)
+            labels = batch['labels'].to(self.device)
+            attention_mask = batch['attention_mask'].to(self.device)
+
+            (logits, ) = model(
+                input_ids=input_ids,
+                labels=labels,
+                attention_mask=attention_mask,
+            )
+
+            train_loss = fobj(logits, labels)
+
+            optimizer.zero_grad()
+            train_loss.backward()
+
+            optimizer.step()
+
+            running_loss += train_loss.item()
+
+        train_loss = running_loss / len(loader)
+
+        return train_loss
 
     def _valid_loop(self, model, fobj, loader):
         model.eval()
@@ -574,6 +574,37 @@ class r002HeadTailRunner(Runner):
     #         f'Best valid acc : {best_acc:.5f}'
     #     self.logger.send_line_notification(line_message)
 
+    def _train_loop(self, model, optimizer, fobj, loader):
+        model.train()
+        running_loss = 0
+
+        for batch in tqdm(loader):
+            input_ids = batch['input_ids'].to(self.device)
+            labels_head = batch['labels_head'].to(self.device)
+            labels_tail = batch['labels_tail'].to(self.device)
+            attention_mask = batch['attention_mask'].to(self.device)
+
+            (logits, ) = model(
+                input_ids=input_ids,
+                attention_mask=attention_mask,
+            )
+
+            logits_head, logits_tail = logits
+
+            train_loss = fobj(logits_head, labels_head)
+            train_loss += fobj(logits_tail, labels_tail)
+
+            optimizer.zero_grad()
+            train_loss.backward()
+
+            optimizer.step()
+
+            running_loss += train_loss.item()
+
+        train_loss = running_loss / len(loader)
+
+        return train_loss
+
     def _valid_loop(self, model, fobj, loader):
         model.eval()
         softmax = Softmax()
@@ -684,6 +715,6 @@ class r002HeadTailRunner(Runner):
             temp_jaccard += jaccard(selected_text, predicted_text)
 
         best_thresh = -1
-        best_jaccard = temp_jaccard / len()
+        best_jaccard = temp_jaccard / len(input_ids)
 
         return best_thresh, best_jaccard

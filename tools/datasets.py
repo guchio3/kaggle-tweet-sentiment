@@ -34,6 +34,12 @@ class TSEDataset(Dataset):
     def __len__(self):
         return len(self.df)
 
+    @abstractmethod
+    def _prep_text(self, row):
+        raise NotImplementedError()
+
+
+class TSESegmentationDataset(TSEDataset):
     def __getitem__(self, idx):
         row = self.df.loc[idx]
 
@@ -50,12 +56,6 @@ class TSEDataset(Dataset):
             'attention_mask': torch.tensor(row['attention_mask']),
         }
 
-    @abstractmethod
-    def _prep_text(self, row):
-        raise NotImplementedError()
-
-
-class TSESegmentationDataset(TSEDataset):
     def _prep_text(self, row):
         text_output = self.tokenizer.encode_plus(
             text=row['text'],
@@ -132,6 +132,23 @@ class TSESegmentationDataset(TSEDataset):
 
 
 class TSEHeadTailDataset(TSEDataset):
+    def __getitem__(self, idx):
+        row = self.df.loc[idx]
+
+        if row['input_ids'] is None:
+            row = self._prep_text(row)
+            self.df.loc[idx, 'input_ids'] = row['input_ids']
+            self.df.loc[idx, 'labels'] = row['labels']
+            self.df.loc[idx, 'attention_mask'] = row['attention_mask']
+
+        return {
+            'textID': row['textID'],
+            'input_ids': torch.tensor(row['input_ids']),
+            'labels_head': torch.tensor(row['labels_head']),
+            'labels_tail': torch.tensor(row['labels_tail']),
+            'attention_mask': torch.tensor(row['attention_mask']),
+        }
+
     def _prep_text(self, row):
         text_output = self.tokenizer.encode_plus(
             text=row['text'],
