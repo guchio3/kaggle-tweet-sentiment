@@ -4,16 +4,14 @@ import os
 import random
 import time
 from glob import glob
+from itertools import chain
 
 import numpy as np
 import pandas as pd
-import torch
-import torch.optim as optim
-from torch.nn import BCEWithLogitsLoss, CrossEntropyLoss, Sigmoid, Softmax
-from torch.utils.data import DataLoader
-from torch.utils.data.sampler import RandomSampler, SequentialSampler
 from tqdm import tqdm
 
+import torch
+import torch.optim as optim
 from tools.datasets import TSEHeadTailDataset, TSESegmentationDataset
 from tools.loggers import myLogger
 from tools.metrics import jaccard
@@ -21,6 +19,9 @@ from tools.models import (BertModelWBinaryMultiLabelClassifierHead,
                           BertModelWDualMultiClassClassifierHead)
 from tools.schedulers import pass_scheduler
 from tools.splitters import mySplitter
+from torch.nn import BCEWithLogitsLoss, CrossEntropyLoss, Sigmoid, Softmax
+from torch.utils.data import DataLoader
+from torch.utils.data.sampler import RandomSampler, SequentialSampler
 
 random.seed(71)
 torch.manual_seed(71)
@@ -548,31 +549,39 @@ class r002HeadTailRunner(Runner):
         super().__init__(exp_id, checkpoint, device, debug, config,
                          TSEHeadTailDataset)
 
-    # def predict(self):
-    #     tst_ids = self._get_test_ids()
-    #     if self.debug:
-    #         tst_ids = tst_ids[:300]
-    #     test_loader = self._build_loader(
-    #         mode="test", ids=tst_ids, augment=None)
-    #     best_loss, best_acc = self._load_best_model()
-    #     test_ids, test_preds = self._test_loop(test_loader)
+    def predict(self, tst_filename):
+        # load and preprocess train.csv
+        tst_df = pd.read_csv(tst_filename)
+        if self.cfg_invalid_labels:
+            tst_df = tst_df.set_index('textID')
+            for invalid_label_csv in self.cfg_invalid_labels:
+                invalid_label_df = pd.read_csv(invalid_label_csv)
+                for i, row in invalid_label_df.iterrows():
+                    tst_df.loc[row['textID'], 'selected_text'] = \
+                        row['guchio_selected_text']
+            tst_df = tst_df.reset_index()
 
-    #     submission_df = pd.read_csv(
-    #         './mnt/inputs/origin/sample_submission.csv')
-    #     submission_df = submission_df.set_index('id_code')
-    #     submission_df.loc[test_ids, 'sirna'] = test_preds
-    #     submission_df = submission_df.reset_index()
-    #     filename_base = f'{self.exp_id}_{self.exp_time}_' \
-    #         f'{best_loss:.5f}_{best_acc:.5f}'
-    #     sub_filename = f'./mnt/submissions/{filename_base}_sub.csv'
-    #     submission_df.to_csv(sub_filename, index=False)
+        # load and apply checkpoint if needed
+        if self.checkpoint:
+            checkpoint = torch.load(self.checkpoint)
+        else:
+            raise Exception('predict needs checkpoint')
 
-    #     self.logger.info(f'Saved submission file to {sub_filename} !')
-    #     line_message = f'Finished the whole pipeline ! \n' \
-    #         f'Training time : {self.trn_time} min \n' \
-    #         f'Best valid loss : {best_loss:.5f} \n' \
-    #         f'Best valid acc : {best_acc:.5f}'
-    #     self.logger.send_line_notification(line_message)
+        tst_loader = self._build_loader(mode='test', df=tst_df,
+                                        **self.cfg_loader)
+
+        # build model and related objects
+        # these objects have state
+        model = self._get_model(**self.cfg_model)
+
+        if self.checkpoint:
+            model.module.load_state_dict(checkpoint['model_state_dict'])
+
+        model = model.to(self.device)
+
+        textIDs, predicted_texts = self._test_loop(model, model, tst_loader)
+
+        return textIDs, predicted_texts
 
     def _train_loop(self, model, optimizer, fobj, loader):
         model.train()
@@ -668,44 +677,13 @@ class r002HeadTailRunner(Runner):
         return valid_loss, best_thresh, best_jaccard, valid_textIDs, \
             valid_input_ids, valid_preds, valid_labels
 
-    # def _test_loop(self, loader):
-    #     self.model.eval()
-
-    #     test_ids = []
-    #     test_preds = []
-
-    #     sel_log('predicting ...', self.logger)
-    #     AUGNUM = 2
-    #     with torch.no_grad():
-    #         for (ids, images, labels) in tqdm(loader):
-    #             images, labels = images.to(
-    #                 self.device, dtype=torch.float), labels.to(
-    #                 self.device)
-    #             outputs = self.model.forward(images)
-    #             # avg predictions
-    #             # outputs = torch.mean(outputs.reshape((-1, 1108, 2)), 2)
-    #             # outputs = torch.mean(torch.stack(
-    #             #     [outputs[i::AUGNUM] for i in range(AUGNUM)], dim=2), dim=2)
-    #             # _, predicted = torch.max(outputs.data, 1)
-    #             sm_outputs = softmax(outputs, dim=1)
-    #             sm_outputs = torch.mean(torch.stack(
-    #                 [sm_outputs[i::AUGNUM] for i in range(AUGNUM)], dim=2), dim=2)
-    #             _, predicted = torch.max(sm_outputs.data, 1)
-
-    #             test_ids.append(ids[::2])
-    #             test_preds.append(predicted.cpu())
-
-    #         test_ids = np.concatenate(test_ids)
-    #         test_preds = torch.cat(test_preds).numpy()
-
-    #     return test_ids, test_preds
-
     def _calc_jaccard(self, input_ids, labels_head, labels_tail,
                       y_preds_head, y_preds_tail, tokenizer, thresh_unit):
 
         temp_jaccard = 0
-        for input_id, label_head, label_tail, y_pred_head, y_pred_tail in zip(
-                input_ids, labels_head, labels_tail, y_preds_head, y_preds_tail):
+        for input_id, label_head, label_tail, y_pred_head, y_pred_tail \
+                in zip(input_ids, labels_head, labels_tail,
+                       y_preds_head, y_preds_tail):
             selected_text = tokenizer.decode(
                 input_id[label_head:label_tail + 1])
             pred_label_head = y_pred_head.argmax()
@@ -718,3 +696,55 @@ class r002HeadTailRunner(Runner):
         best_jaccard = temp_jaccard / len(input_ids)
 
         return best_thresh, best_jaccard
+
+    def _test_loop(self, model, loader):
+        model.eval()
+        softmax = Softmax()
+
+        with torch.no_grad():
+            textIDs, test_input_ids, test_preds_head, test_preds_tail = [], [], [], []
+            for batch in tqdm(loader):
+                textID = batch['textID']
+                input_ids = batch['input_ids'].to(self.device)
+                attention_mask = batch['attention_mask'].to(self.device)
+
+                (logits, ) = model(
+                    input_ids=input_ids,
+                    attention_mask=attention_mask,
+                )
+                logits_head, logits_tail = logits
+
+                predicted_head = softmax(logits_head.data)
+                predicted_tail = softmax(logits_tail.data)
+
+                textIDs.append(textID)
+                test_input_ids.append(input_ids.cpu())
+                test_preds_head.append(predicted_head.cpu())
+                test_preds_tail.append(predicted_tail.cpu())
+
+            textIDs = list(chain.from_iterable(textIDs))
+            test_input_ids = torch.cat(test_input_ids)
+            test_preds_head = torch.cat(test_preds_head)
+            test_preds_tail = torch.cat(test_preds_tail)
+
+            predicted_texts = self._get_predicted_texts(
+                test_input_ids,
+                test_preds_head,
+                test_preds_tail,
+                loader.dataset.tokenizer,
+            )
+
+        return textIDs, predicted_texts
+
+    def _get_predicted_texts(self, input_ids, y_preds_head,
+                             y_preds_tail, tokenizer):
+        predicted_texts = []
+        for input_id, y_pred_head, y_pred_tail \
+                in zip(input_ids, y_preds_head, y_preds_tail):
+            pred_label_head = y_pred_head.argmax()
+            pred_label_tail = y_pred_tail.argmax()
+            predicted_text = tokenizer.decode(
+                input_id[pred_label_head:pred_label_tail + 1])
+            predicted_texts.append(predicted_text)
+
+        return predicted_texts

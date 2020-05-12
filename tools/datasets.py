@@ -144,9 +144,9 @@ class TSEHeadTailDataset(TSEDataset):
         return {
             'textID': row['textID'],
             'input_ids': torch.tensor(row['input_ids']),
+            'attention_mask': torch.tensor(row['attention_mask']),
             'labels_head': torch.tensor(row['labels_head']),
             'labels_tail': torch.tensor(row['labels_tail']),
-            'attention_mask': torch.tensor(row['attention_mask']),
         }
 
     def _prep_text(self, row):
@@ -160,6 +160,13 @@ class TSEHeadTailDataset(TSEDataset):
             return_token_type_ids=False,
             return_attention_mask=True,
         )
+        row['input_ids'] = text_output['input_ids']
+        row['attention_mask'] = text_output['attention_mask']
+        if 'selected_text' not in row:
+            row['labels_head'] = -1
+            row['labels_tail'] = -1
+            return row
+
         selected_text_output = self.tokenizer.encode_plus(
             text=row['selected_text'],
             text_pair=None,
@@ -203,8 +210,6 @@ class TSEHeadTailDataset(TSEDataset):
             print(input_ids)
             print(sel_input_ids)
 
-        row['input_ids'] = text_output['input_ids']
         row['labels_head'] = best_matched_i
         row['labels_tail'] = best_matched_i + len(sel_input_ids) + 1
-        row['attention_mask'] = text_output['attention_mask']
         return row
