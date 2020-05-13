@@ -170,12 +170,16 @@ class Runner(object):
 
                 self.histories[fold_num]['trn_loss'].append(trn_loss)
                 self.histories[fold_num]['val_loss'].append(val_loss)
-                # self.histories[fold_num]['val_jac'].append(val_jac)
+                self.histories[fold_num]['val_jac'].append(best_jaccard)
 
                 scheduler.step()
 
                 # send to cpu
                 model = model.to('cpu')
+                for state in optimizer.state.values():
+                    for k, v in state.items():
+                        if isinstance(v, torch.Tensor):
+                            state[k] = v.cpu()
 
                 self._save_checkpoint(fold_num, current_epoch,
                                       model, optimizer, scheduler,
