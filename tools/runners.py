@@ -672,7 +672,7 @@ class r002HeadTailRunner(Runner):
                 itertools.chain.from_iterable(valid_textIDs_list))
             valid_texts = list(itertools.chain.from_iterable(valid_texts))
             valid_input_ids = torch.cat(valid_input_ids)
-            valid_sentiments.append(valid_sentiment)
+            valid_sentiments = list(itertools.chain.from_iterable(valid_sentiments))
             valid_selected_texts = list(
                 itertools.chain.from_iterable(valid_selected_texts))
             valid_preds_head = torch.cat(valid_preds_head)
@@ -724,6 +724,7 @@ class r002HeadTailRunner(Runner):
         for text, input_id, sentiment, selected_text, y_pred_head, y_pred_tail \
                 in zip(texts, input_ids, sentiments, selected_texts,
                        y_preds_head, y_preds_tail):
+
             if sentiment == 'neutral':
                 predicted_text = text
             else:

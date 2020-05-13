@@ -22,10 +22,10 @@ class TSEDataset(Dataset):
             raise NotImplementedError(err_msg)
         self.max_length = max_length
         self.df = df.reset_index(drop=True)
-        for i, row in self.df.iterrows():
-            self.df.loc[i, 'text'] = f'[{row["sentiment"]}] ' \
-                + str(row['text'])
-            # self.df.loc[i, 'text'] = str(row['text']) + f' [SEP] [{row["sentiment"]}]'
+        # for i, row in self.df.iterrows():
+        #     self.df.loc[i, 'text'] = f'[{row["sentiment"]}] ' \
+        #         + str(row['text'])
+        #     # self.df.loc[i, 'text'] = str(row['text']) + f' [SEP] [{row["sentiment"]}]'
         # self.tokenizer.add_tokens([
         #     '[neutral]',
         #     '[positive]',
@@ -160,7 +160,8 @@ class TSEHeadTailDataset(TSEDataset):
     def _prep_text(self, row):
         text_output = self.tokenizer.encode_plus(
             text=" " + " ".join(row['text'].split()),
-            text_pair=None,
+            # text_pair=None,
+            text_pair=f"[{row['sentiment']}]",
             add_special_tokens=True,
             max_length=self.max_length,
             pad_to_max_length=True,
