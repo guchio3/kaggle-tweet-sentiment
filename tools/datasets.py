@@ -83,8 +83,7 @@ class TSESegmentationDataset(TSEDataset):
         sel_input_ids = selected_text_output['input_ids']
         matched_cnt = len([i for i in input_ids[:len(sel_input_ids)]
                            if i in sel_input_ids])
-        best_matched_cnt = len([i for i in input_ids[:len(sel_input_ids)]
-                                if i in sel_input_ids])
+        best_matched_cnt = matched_cnt
         best_matched_i = 0
         # for i in range(0, len(input_ids)):
         for i in range(0, len(input_ids) - len(sel_input_ids)):
@@ -183,8 +182,7 @@ class TSEHeadTailDataset(TSEDataset):
         sel_input_ids = selected_text_output['input_ids']
         matched_cnt = len([i for i in input_ids[:len(sel_input_ids)]
                            if i in sel_input_ids])
-        best_matched_cnt = len([i for i in input_ids[:len(sel_input_ids)]
-                                if i in sel_input_ids])
+        best_matched_cnt = matched_cnt
         best_matched_i = 0
         # for i in range(0, len(input_ids)):
         for i in range(0, len(input_ids) - len(sel_input_ids)):
@@ -209,7 +207,8 @@ class TSEHeadTailDataset(TSEDataset):
             print('===============================')
             print(input_ids)
             print(sel_input_ids)
+            print(selected_text_output['input_ids'])
 
         row['labels_head'] = best_matched_i
-        row['labels_tail'] = best_matched_i + len(sel_input_ids) + 1
+        row['labels_tail'] = best_matched_i + len(sel_input_ids)
         return row

@@ -689,11 +689,11 @@ class r002HeadTailRunner(Runner):
                 in zip(input_ids, labels_head, labels_tail,
                        y_preds_head, y_preds_tail):
             selected_text = tokenizer.decode(
-                input_id[label_head:label_tail + 1])
+                input_id[label_head:label_tail])
             pred_label_head = y_pred_head.argmax()
             pred_label_tail = y_pred_tail.argmax()
             predicted_text = tokenizer.decode(
-                input_id[pred_label_head:pred_label_tail + 1])
+                input_id[pred_label_head:pred_label_tail])
             temp_jaccard += jaccard(selected_text, predicted_text)
 
         best_thresh = -1
@@ -748,7 +748,7 @@ class r002HeadTailRunner(Runner):
             pred_label_head = y_pred_head.argmax()
             pred_label_tail = y_pred_tail.argmax()
             predicted_text = tokenizer.decode(
-                input_id[pred_label_head:pred_label_tail + 1])
+                input_id[pred_label_head:pred_label_tail])
             predicted_texts.append(predicted_text)
 
         return predicted_texts
