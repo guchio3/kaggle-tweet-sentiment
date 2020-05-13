@@ -25,6 +25,12 @@ class TSEDataset(Dataset):
         for i, row in self.df.iterrows():
             self.df.loc[i, 'text'] = f'[{row["sentiment"]}] ' \
                 + str(row['text'])
+            # self.df.loc[i, 'text'] = str(row['text']) + f' [SEP] [{row["sentiment"]}]'
+        # self.tokenizer.add_tokens([
+        #     '[neutral]',
+        #     '[positive]',
+        #     '[negative]',
+        #     ])
         self.df['input_ids'] = None
         self.df['labels'] = None
         self.df['attention_mask'] = None
@@ -142,7 +148,9 @@ class TSEHeadTailDataset(TSEDataset):
 
         return {
             'textID': row['textID'],
+            'text': row['text'],
             'input_ids': torch.tensor(row['input_ids']),
+            'sentiment': row['sentiment'],
             'attention_mask': torch.tensor(row['attention_mask']),
             'selected_text': row['selected_text'],
             'labels_head': torch.tensor(row['labels_head']),

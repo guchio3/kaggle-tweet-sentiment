@@ -629,12 +629,14 @@ class r002HeadTailRunner(Runner):
 
         valid_textIDs_list = []
         with torch.no_grad():
-            valid_textIDs, valid_input_ids, valid_selected_texts = [], [], []
+            valid_texts, valid_textIDs, valid_input_ids, valid_sentiments, valid_selected_texts = [], [], [], [], []
             valid_preds_head, valid_preds_tail = [], []
             valid_labels_head, valid_labels_tail = [], []
             for batch in tqdm(loader):
                 textIDs = batch['textID']
+                valid_text = batch['text']
                 input_ids = batch['input_ids'].to(self.device)
+                valid_sentiment = batch['sentiment']
                 selected_texts = batch['selected_text']
                 labels_head = batch['labels_head'].to(self.device)
                 labels_tail = batch['labels_tail'].to(self.device)
@@ -655,7 +657,9 @@ class r002HeadTailRunner(Runner):
                 predicted_tail = softmax(logits_tail.data)
 
                 valid_textIDs_list.append(textIDs)
+                valid_texts.append(valid_text)
                 valid_input_ids.append(input_ids.cpu())
+                valid_sentiments.append(valid_sentiment)
                 valid_selected_texts.append(selected_texts)
                 valid_preds_head.append(predicted_head.cpu())
                 valid_preds_tail.append(predicted_tail.cpu())
@@ -666,7 +670,9 @@ class r002HeadTailRunner(Runner):
 
             valid_textIDs = list(
                 itertools.chain.from_iterable(valid_textIDs_list))
+            valid_texts = list(itertools.chain.from_iterable(valid_texts))
             valid_input_ids = torch.cat(valid_input_ids)
+            valid_sentiments.append(valid_sentiment)
             valid_selected_texts = list(
                 itertools.chain.from_iterable(valid_selected_texts))
             valid_preds_head = torch.cat(valid_preds_head)
@@ -675,7 +681,9 @@ class r002HeadTailRunner(Runner):
             valid_labels_tail = torch.cat(valid_labels_tail)
 
             best_thresh, best_jaccard = \
-                self._calc_jaccard(valid_input_ids,
+                self._calc_jaccard(valid_texts,
+                                   valid_input_ids,
+                                   valid_sentiments,
                                    valid_selected_texts,
                                    # valid_labels_head,
                                    # valid_labels_tail,
@@ -709,17 +717,20 @@ class r002HeadTailRunner(Runner):
     #    best_jaccard = temp_jaccard / len(input_ids)
 
     #    return best_thresh, best_jaccard
-    def _calc_jaccard(self, input_ids, selected_texts,
+    def _calc_jaccard(self, texts, input_ids, sentiments, selected_texts,
                       y_preds_head, y_preds_tail, tokenizer, thresh_unit):
 
         temp_jaccard = 0
-        for input_id, selected_text, y_pred_head, y_pred_tail \
-                in zip(input_ids, selected_texts,
+        for text, input_id, sentiment, selected_text, y_pred_head, y_pred_tail \
+                in zip(texts, input_ids, sentiments, selected_texts,
                        y_preds_head, y_preds_tail):
-            pred_label_head = y_pred_head.argmax()
-            pred_label_tail = y_pred_tail.argmax()
-            predicted_text = tokenizer.decode(
-                input_id[pred_label_head:pred_label_tail])
+            if sentiment == 'neutral':
+                predicted_text = text
+            else:
+                pred_label_head = y_pred_head.argmax()
+                pred_label_tail = y_pred_tail.argmax()
+                predicted_text = tokenizer.decode(
+                    input_id[pred_label_head:pred_label_tail])
             temp_jaccard += jaccard(selected_text, predicted_text)
 
         best_thresh = -1
@@ -732,10 +743,12 @@ class r002HeadTailRunner(Runner):
         softmax = Softmax()
 
         with torch.no_grad():
-            textIDs, test_input_ids, test_preds_head, test_preds_tail = [], [], [], []
+            textIDs, test_texts, test_input_ids, test_sentiments, test_preds_head, test_preds_tail = [], [], [], [], [], []
             for batch in tqdm(loader):
                 textID = batch['textID']
+                test_text = batch['text']
                 input_ids = batch['input_ids'].to(self.device)
+                sentiment = batch['sentiment']
                 attention_mask = batch['attention_mask'].to(self.device)
 
                 (logits, ) = model(
@@ -747,18 +760,24 @@ class r002HeadTailRunner(Runner):
                 predicted_head = softmax(logits_head.data)
                 predicted_tail = softmax(logits_tail.data)
 
+                test_texts.append(test_text)
                 textIDs.append(textID)
                 test_input_ids.append(input_ids.cpu())
+                test_sentiments.append(sentiment)
                 test_preds_head.append(predicted_head.cpu())
                 test_preds_tail.append(predicted_tail.cpu())
 
+            test_texts = list(chain.from_iterable(test_texts))
             textIDs = list(chain.from_iterable(textIDs))
             test_input_ids = torch.cat(test_input_ids)
+            test_sentiments = list(chain.from_iterable(test_sentiments))
             test_preds_head = torch.cat(test_preds_head)
             test_preds_tail = torch.cat(test_preds_tail)
 
             predicted_texts = self._get_predicted_texts(
+                test_texts,
                 test_input_ids,
+                test_sentiments,
                 test_preds_head,
                 test_preds_tail,
                 loader.dataset.tokenizer,
@@ -766,11 +785,14 @@ class r002HeadTailRunner(Runner):
 
         return textIDs, predicted_texts
 
-    def _get_predicted_texts(self, input_ids, y_preds_head,
+    def _get_predicted_texts(self, texts, input_ids, sentiments, y_preds_head,
                              y_preds_tail, tokenizer):
         predicted_texts = []
-        for input_id, y_pred_head, y_pred_tail \
-                in zip(input_ids, y_preds_head, y_preds_tail):
+        for text, input_id, sentiment, y_pred_head, y_pred_tail \
+                in zip(texts, input_ids, sentiments, y_preds_head, y_preds_tail):
+            if sentiment == 'neutral':
+                predicted_texts.append(text)
+                continue
             pred_label_head = y_pred_head.argmax()
             pred_label_tail = y_pred_tail.argmax()
             predicted_text = tokenizer.decode(
