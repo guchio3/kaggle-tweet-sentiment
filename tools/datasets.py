@@ -1,10 +1,9 @@
-from abc import ABCMeta, abstractmethod
+from abc import abstractmethod
 
 import numpy as np
-import pandas as pd
+
 import torch
 from torch.utils.data import Dataset
-from tqdm import tqdm
 from transformers import BertTokenizer
 
 
@@ -24,7 +23,8 @@ class TSEDataset(Dataset):
         self.max_length = max_length
         self.df = df.reset_index(drop=True)
         for i, row in self.df.iterrows():
-            self.df.loc[i, 'text'] = f'{row["sentiment"]} ' + str(row['text'])
+            self.df.loc[i, 'text'] = f'[{row["sentiment"]}] ' \
+                + str(row['text'])
         self.df['input_ids'] = None
         self.df['labels'] = None
         self.df['attention_mask'] = None
@@ -151,7 +151,7 @@ class TSEHeadTailDataset(TSEDataset):
 
     def _prep_text(self, row):
         text_output = self.tokenizer.encode_plus(
-            text=" "+" ".join(row['text'].split()),
+            text=" " + " ".join(row['text'].split()),
             text_pair=None,
             add_special_tokens=True,
             max_length=self.max_length,
@@ -168,7 +168,7 @@ class TSEHeadTailDataset(TSEDataset):
             return row
 
         selected_text_output = self.tokenizer.encode_plus(
-            text=" "+" ".join(row['selected_text'].split()),
+            text=" " + " ".join(row['selected_text'].split()),
             text_pair=None,
             add_special_tokens=False,
             max_length=self.max_length,

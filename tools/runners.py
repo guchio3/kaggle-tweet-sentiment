@@ -690,7 +690,7 @@ class r002HeadTailRunner(Runner):
         return valid_loss, best_thresh, best_jaccard, valid_textIDs, \
             valid_input_ids, valid_preds, valid_labels
 
-    #def _calc_jaccard(self, input_ids, labels_head, labels_tail,
+    # def _calc_jaccard(self, input_ids, labels_head, labels_tail,
     #                  y_preds_head, y_preds_tail, tokenizer, thresh_unit):
 
     #    temp_jaccard = 0
@@ -726,7 +726,6 @@ class r002HeadTailRunner(Runner):
         best_jaccard = temp_jaccard / len(input_ids)
 
         return best_thresh, best_jaccard
-
 
     def _test_loop(self, model, loader):
         model.eval()
