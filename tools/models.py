@@ -58,13 +58,18 @@ class BertModelWDualMultiClassClassifierHead(nn.Module):
             raise NotImplementedError
         self.num_labels = num_labels
         self.dropout = nn.Dropout(0.2)
-        self.classifier_head = nn.Linear(
-            self.model.pooler.dense.out_features, num_labels)
-        self.classifier_tail = nn.Linear(
-            self.model.pooler.dense.out_features, num_labels)
+        self.classifier_conv_head = nn.Conv1d(self.model.pooler.dense.out_features, 1, 1)
+        self.classifier_conv_tail = nn.Conv1d(self.model.pooler.dense.out_features, 1, 1)
+        self.add_module('conv_output_head', self.classifier_conv_head)
+        self.add_module('conv_output_tail', self.classifier_conv_tail)
 
-        self.add_module('fc_output_head', self.classifier_head)
-        self.add_module('fc_output_tail', self.classifier_tail)
+        # self.classifier_head = nn.Linear(
+        #     self.model.pooler.dense.out_features, num_labels)
+        # self.classifier_tail = nn.Linear(
+        #     self.model.pooler.dense.out_features, num_labels)
+
+        # self.add_module('fc_output_head', self.classifier_head)
+        # self.add_module('fc_output_tail', self.classifier_tail)
 
     def forward(self, input_ids=None, attention_mask=None,
                 token_type_ids=None, position_ids=None, head_mask=None,
@@ -79,11 +84,16 @@ class BertModelWDualMultiClassClassifierHead(nn.Module):
                              encoder_hidden_states=encoder_hidden_states,
                              encoder_attention_mask=encoder_attention_mask)
         # pooled_output = outputs[1]
-        pooled_output = torch.mean(outputs[0], dim=1)
+        # pooled_output = torch.mean(outputs[0], dim=1)
 
-        pooled_output = self.dropout(pooled_output)
-        logits_head = self.classifier_head(pooled_output)
-        logits_tail = self.classifier_tail(pooled_output)
+        # pooled_output = self.dropout(pooled_output)
+        # logits_head = self.classifier_head(pooled_output)
+        # logits_tail = self.classifier_tail(pooled_output)
+        output = outputs[0]
+        output = torch.transpose(output, 1, 2)
+        output = self.dropout(output)
+        logits_head = self.classifier_conv_head(output).squeeze()
+        logits_tail = self.classifier_conv_tail(output).squeeze()
 
         # add hidden states and attention if they are here
         outputs = ((logits_head, logits_tail),) + outputs[2:]

@@ -25,6 +25,9 @@ RUN conda install pytorch torchvision cudatoolkit=10.1 -c pytorch --force-reinst
 # install pip packages
 RUN pip install nlpaug torchcontrib
 
+# pre-install transformers models
+RUN python -c "from transformers import BertModel, BertTokenizer; BertModel.from_pretrained('bert-base-uncased'); BertTokenizer.from_pretrained('bert-base-uncased');"
+
 # set jupyter notebook
 # jupyter vim key-bind settings
 RUN pip install jupyter_contrib_nbextensions

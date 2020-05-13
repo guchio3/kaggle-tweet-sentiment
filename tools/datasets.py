@@ -151,7 +151,7 @@ class TSEHeadTailDataset(TSEDataset):
 
     def _prep_text(self, row):
         text_output = self.tokenizer.encode_plus(
-            text=row['text'],
+            text=" "+" ".join(row['text'].split()),
             text_pair=None,
             add_special_tokens=True,
             max_length=self.max_length,
@@ -168,7 +168,7 @@ class TSEHeadTailDataset(TSEDataset):
             return row
 
         selected_text_output = self.tokenizer.encode_plus(
-            text=row['selected_text'],
+            text=" "+" ".join(row['selected_text'].split()),
             text_pair=None,
             add_special_tokens=False,
             max_length=self.max_length,

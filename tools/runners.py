@@ -150,6 +150,10 @@ class Runner(object):
                 start_time = time.time()
                 # send to device
                 model = model.to(self.device)
+                for state in optimizer.state.values():
+                    for k, v in state.items():
+                        if isinstance(v, torch.Tensor):
+                            state[k] = v.to(self.device)
 
                 self._warmup(current_epoch, self.cfg_train['warmup_epoch'],
                              model)
@@ -673,6 +677,8 @@ class r002HeadTailRunner(Runner):
             best_thresh, best_jaccard = \
                 self._calc_jaccard(valid_input_ids,
                                    valid_selected_texts,
+                                   # valid_labels_head,
+                                   # valid_labels_tail,
                                    valid_preds_head,
                                    valid_preds_tail,
                                    loader.dataset.tokenizer,
@@ -684,6 +690,25 @@ class r002HeadTailRunner(Runner):
         return valid_loss, best_thresh, best_jaccard, valid_textIDs, \
             valid_input_ids, valid_preds, valid_labels
 
+    #def _calc_jaccard(self, input_ids, labels_head, labels_tail,
+    #                  y_preds_head, y_preds_tail, tokenizer, thresh_unit):
+
+    #    temp_jaccard = 0
+    #    for input_id, label_head, label_tail, y_pred_head, y_pred_tail \
+    #            in zip(input_ids, labels_head, labels_tail,
+    #                   y_preds_head, y_preds_tail):
+    #        selected_text = tokenizer.decode(
+    #            input_id[label_head:label_tail])
+    #        pred_label_head = y_pred_head.argmax()
+    #        pred_label_tail = y_pred_tail.argmax()
+    #        predicted_text = tokenizer.decode(
+    #            input_id[pred_label_head:pred_label_tail])
+    #        temp_jaccard += jaccard(selected_text, predicted_text)
+
+    #    best_thresh = -1
+    #    best_jaccard = temp_jaccard / len(input_ids)
+
+    #    return best_thresh, best_jaccard
     def _calc_jaccard(self, input_ids, selected_texts,
                       y_preds_head, y_preds_tail, tokenizer, thresh_unit):
 
@@ -701,6 +726,7 @@ class r002HeadTailRunner(Runner):
         best_jaccard = temp_jaccard / len(input_ids)
 
         return best_thresh, best_jaccard
+
 
     def _test_loop(self, model, loader):
         model.eval()
