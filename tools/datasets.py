@@ -144,6 +144,7 @@ class TSEHeadTailDataset(TSEDataset):
             'textID': row['textID'],
             'input_ids': torch.tensor(row['input_ids']),
             'attention_mask': torch.tensor(row['attention_mask']),
+            'selected_text': row['selected_text'],
             'labels_head': torch.tensor(row['labels_head']),
             'labels_tail': torch.tensor(row['labels_tail']),
         }

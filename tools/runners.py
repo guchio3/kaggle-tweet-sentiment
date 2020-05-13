@@ -625,12 +625,13 @@ class r002HeadTailRunner(Runner):
 
         valid_textIDs_list = []
         with torch.no_grad():
-            valid_textIDs, valid_input_ids = [], []
+            valid_textIDs, valid_input_ids, valid_selected_texts = [], [], []
             valid_preds_head, valid_preds_tail = [], []
             valid_labels_head, valid_labels_tail = [], []
             for batch in tqdm(loader):
                 textIDs = batch['textID']
                 input_ids = batch['input_ids'].to(self.device)
+                selected_texts = batch['selected_text']
                 labels_head = batch['labels_head'].to(self.device)
                 labels_tail = batch['labels_tail'].to(self.device)
                 attention_mask = batch['attention_mask'].to(self.device)
@@ -651,6 +652,7 @@ class r002HeadTailRunner(Runner):
 
                 valid_textIDs_list.append(textIDs)
                 valid_input_ids.append(input_ids.cpu())
+                valid_selected_texts.append(selected_texts)
                 valid_preds_head.append(predicted_head.cpu())
                 valid_preds_tail.append(predicted_tail.cpu())
                 valid_labels_head.append(labels_head.cpu())
@@ -661,6 +663,8 @@ class r002HeadTailRunner(Runner):
             valid_textIDs = list(
                 itertools.chain.from_iterable(valid_textIDs_list))
             valid_input_ids = torch.cat(valid_input_ids)
+            valid_selected_texts = list(
+                itertools.chain.from_iterable(valid_selected_texts))
             valid_preds_head = torch.cat(valid_preds_head)
             valid_preds_tail = torch.cat(valid_preds_tail)
             valid_labels_head = torch.cat(valid_labels_head)
@@ -668,8 +672,7 @@ class r002HeadTailRunner(Runner):
 
             best_thresh, best_jaccard = \
                 self._calc_jaccard(valid_input_ids,
-                                   valid_labels_head,
-                                   valid_labels_tail,
+                                   valid_selected_texts,
                                    valid_preds_head,
                                    valid_preds_tail,
                                    loader.dataset.tokenizer,
@@ -681,15 +684,13 @@ class r002HeadTailRunner(Runner):
         return valid_loss, best_thresh, best_jaccard, valid_textIDs, \
             valid_input_ids, valid_preds, valid_labels
 
-    def _calc_jaccard(self, input_ids, labels_head, labels_tail,
+    def _calc_jaccard(self, input_ids, selected_texts,
                       y_preds_head, y_preds_tail, tokenizer, thresh_unit):
 
         temp_jaccard = 0
-        for input_id, label_head, label_tail, y_pred_head, y_pred_tail \
-                in zip(input_ids, labels_head, labels_tail,
+        for input_id, selected_text, y_pred_head, y_pred_tail \
+                in zip(input_ids, selected_texts,
                        y_preds_head, y_preds_tail):
-            selected_text = tokenizer.decode(
-                input_id[label_head:label_tail])
             pred_label_head = y_pred_head.argmax()
             pred_label_tail = y_pred_tail.argmax()
             predicted_text = tokenizer.decode(

@@ -7,9 +7,9 @@ split:
     random_state: 71
 loader:
     trn_sampler_type: random
-    trn_batch_size: 48
+    trn_batch_size: 40
     tst_sampler_type: sequential
-    tst_batch_size: 48
+    tst_batch_size: 40
 dataset:
     tokenizer_type: bert
     pretrained_model_name_or_path: bert-base-uncased
