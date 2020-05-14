@@ -16,6 +16,9 @@ class myLogger:
     def warn(self, message):
         self.logger.warn(message)
 
+    def warning(self, message):
+        self.logger.warning(message)
+
     def send_line_notification(self, message):
         self.logger.info(message)
 

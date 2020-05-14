@@ -3,6 +3,8 @@ from abc import abstractmethod
 import numpy as np
 
 import torch
+from tools.tokenizers import (myBertByteLevelBPETokenizer,
+                              myRobertaByteLevelBPETokenizer)
 from torch.utils.data import Dataset
 from transformers import BertTokenizer, RobertaTokenizer
 
@@ -21,6 +23,20 @@ class TSEDataset(Dataset):
                 .from_pretrained(
                     pretrained_model_name_or_path,
                     do_lower_case=do_lower_case)
+        elif tokenizer_type == 'bert_bytelevel_bpe':
+            self.tokenizer = myBertByteLevelBPETokenizer(
+                vocab_file=f'{pretrained_model_name_or_path}/bert/tokenizer/vocab.json',
+                # merges_file=f'{pretrained_model_name_or_path}/bert/tokenizer/merges.txt',
+                lowercase=do_lower_case,
+                add_prefix_space=True
+            )
+        elif tokenizer_type == 'roberta_bytelevel_bpe':
+            self.tokenizer = myRobertaByteLevelBPETokenizer(
+                vocab_file=f'{pretrained_model_name_or_path}/roberta/tokenizer/vocab.json',
+                merges_file=f'{pretrained_model_name_or_path}/roberta/tokenizer/merges.txt',
+                lowercase=do_lower_case,
+                add_prefix_space=True
+            )
         else:
             err_msg = f'{tokenizer_type} is not ' \
                 'implemented for TSEDataset.'
@@ -35,7 +51,7 @@ class TSEDataset(Dataset):
             '[neutral]',
             '[positive]',
             '[negative]',
-            ])
+        ])
         self.df['input_ids'] = None
         self.df['labels'] = None
         self.df['attention_mask'] = None
@@ -219,12 +235,13 @@ class TSEHeadTailDataset(TSEDataset):
                 break
 
         if best_matched_cnt == 0:
-            print('===============================')
-            print(row)
-            print('===============================')
-            print(input_ids)
-            print(sel_input_ids)
-            print(selected_text_output['input_ids'])
+            # print('===============================')
+            # print(row)
+            # print('===============================')
+            # print(input_ids)
+            # print(sel_input_ids)
+            # print(selected_text_output['input_ids'])
+            self.logger.warning(f'textID: {row["textID"]} -- no matching.')
 
         row['labels_head'] = best_matched_i
         row['labels_tail'] = best_matched_i + len(sel_input_ids)
