@@ -578,9 +578,9 @@ class r002HeadTailRunner(Runner):
         super().__init__(exp_id, checkpoint, device, debug, config,
                          TSEHeadTailDataset)
 
-    def predict(self, tst_filenames):
+    def predict(self, tst_filename, checkpoints):
         fold_test_preds_heads, fold_test_preds_tails = [], []
-        for tst_filename in tst_filenames:
+        for checkpoint in checkpoints:
             # load and preprocess train.csv
             tst_df = pd.read_csv(tst_filename)
             if self.cfg_invalid_labels:
@@ -593,8 +593,8 @@ class r002HeadTailRunner(Runner):
                 tst_df = tst_df.reset_index()
 
             # load and apply checkpoint if needed
-            if self.checkpoint:
-                checkpoint = torch.load(self.checkpoint)
+            if checkpoint:
+                checkpoint = torch.load(checkpoint)
             else:
                 raise Exception('predict needs checkpoint')
 
@@ -608,7 +608,7 @@ class r002HeadTailRunner(Runner):
             module.resize_token_embeddings(
                 len(tst_loader.dataset.tokenizer))  # for sentiment
 
-            if self.checkpoint:
+            if checkpoint:
                 module.load_state_dict(checkpoint['model_state_dict'])
 
             model = model.to(self.device)
