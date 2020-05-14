@@ -195,6 +195,13 @@ class Runner(object):
                                       val_labels, val_loss,
                                       best_thresh, best_jaccard)
 
+            best_filename = self._search_best_filename(fold_num)
+            if not os.path.exists(f'./checkpoints/{self.exp_id}/best'):
+                os.mkdir(f'./checkpoints/{self.exp_id}/best')
+            os.rename(
+                best_filename,
+                f'./checkpoints/{self.exp_id}/best/{best_filename.split("/")[-1]}')
+
             fold_time = int(time.time() - epoch_start_time) // 60
             line_message = f'fini fold {fold_num} in {fold_time} min. \n' \
                 f'epoch best jaccard: {epoch_best_jaccard}'
@@ -277,7 +284,7 @@ class Runner(object):
             #     [http://katsura-jp.hatenablog.com/entry/2019/01/30/183501]
             # if you want to use cosine annealing, use below scheduler.
             scheduler = optim.lr_scheduler.CosineAnnealingLR(
-                optimizer, T_max=max_epoch, eta_min=0.00001
+                optimizer, T_max=max_epoch, eta_min=0.00002
             )
         else:
             raise Exception(f'invalid scheduler_type: {scheduler_type}')
@@ -365,18 +372,18 @@ class Runner(object):
         torch.save(cp_dict, cp_filename)
 
     def _search_best_filename(self, fold_num):
-        best_loss = np.inf
-        # best_metric = -1
+        # best_loss = np.inf
+        best_metric = -1
         best_filename = ''
         for filename in glob(f'./checkpoints/{self.exp_id}/{fold_num}/*'):
             split_filename = filename.split('/')[-1].split('_')
-            temp_loss = float(split_filename[2])
-            # temp_metric = float(split_filename[3])
-            # if temp_metric > best_metric:
-            if temp_loss < best_loss:
+            # temp_loss = float(split_filename[2])
+            temp_metric = float(split_filename[4])
+            # if temp_loss < best_loss:
+            if temp_metric > best_metric:
                 best_filename = filename
-                best_loss = temp_loss
-                # best_metric = temp_metric
+                # best_loss = temp_loss
+                best_metric = temp_metric
         return best_filename  # , best_loss, best_acc
 
     def _load_best_checkpoint(self, fold_num):
@@ -571,40 +578,60 @@ class r002HeadTailRunner(Runner):
         super().__init__(exp_id, checkpoint, device, debug, config,
                          TSEHeadTailDataset)
 
-    def predict(self, tst_filename):
-        # load and preprocess train.csv
-        tst_df = pd.read_csv(tst_filename)
-        if self.cfg_invalid_labels:
-            tst_df = tst_df.set_index('textID')
-            for invalid_label_csv in self.cfg_invalid_labels:
-                invalid_label_df = pd.read_csv(invalid_label_csv)
-                for i, row in invalid_label_df.iterrows():
-                    tst_df.loc[row['textID'], 'selected_text'] = \
-                        row['guchio_selected_text']
-            tst_df = tst_df.reset_index()
+    def predict(self, tst_filenames):
+        fold_test_preds_heads, fold_test_preds_tails = [], []
+        for tst_filename in tst_filenames:
+            # load and preprocess train.csv
+            tst_df = pd.read_csv(tst_filename)
+            if self.cfg_invalid_labels:
+                tst_df = tst_df.set_index('textID')
+                for invalid_label_csv in self.cfg_invalid_labels:
+                    invalid_label_df = pd.read_csv(invalid_label_csv)
+                    for i, row in invalid_label_df.iterrows():
+                        tst_df.loc[row['textID'], 'selected_text'] = \
+                            row['guchio_selected_text']
+                tst_df = tst_df.reset_index()
 
-        # load and apply checkpoint if needed
-        if self.checkpoint:
-            checkpoint = torch.load(self.checkpoint)
-        else:
-            raise Exception('predict needs checkpoint')
+            # load and apply checkpoint if needed
+            if self.checkpoint:
+                checkpoint = torch.load(self.checkpoint)
+            else:
+                raise Exception('predict needs checkpoint')
 
-        tst_loader = self._build_loader(mode='test', df=tst_df,
-                                        **self.cfg_loader)
+            tst_loader = self._build_loader(mode='test', df=tst_df,
+                                            **self.cfg_loader)
 
-        # build model and related objects
-        # these objects have state
-        model = self._get_model(**self.cfg_model)
-        module = model if self.device == 'cpu' else model.module
-        module.resize_token_embeddings(
-            len(tst_loader.dataset.tokenizer))  # for sentiment
+            # build model and related objects
+            # these objects have state
+            model = self._get_model(**self.cfg_model)
+            module = model if self.device == 'cpu' else model.module
+            module.resize_token_embeddings(
+                len(tst_loader.dataset.tokenizer))  # for sentiment
 
-        if self.checkpoint:
-            module.load_state_dict(checkpoint['model_state_dict'])
+            if self.checkpoint:
+                module.load_state_dict(checkpoint['model_state_dict'])
 
-        model = model.to(self.device)
+            model = model.to(self.device)
 
-        textIDs, predicted_texts = self._test_loop(model, tst_loader)
+            textIDs, test_texts, test_input_ids, \
+                test_sentiments, test_preds_head, test_preds_tail\
+                = self._test_loop(model, tst_loader)
+
+            fold_test_preds_heads.append(test_preds_head)
+            fold_test_preds_tails.append(test_preds_tail)
+
+        avg_test_preds_head = torch.mean(
+            torch.stack(fold_test_preds_heads), dim=0)
+        avg_test_preds_tail = torch.mean(
+            torch.stack(fold_test_preds_tails), dim=0)
+        predicted_texts = self._get_predicted_texts(
+            test_texts,
+            test_input_ids,
+            test_sentiments,
+            avg_test_preds_head,
+            avg_test_preds_tail,
+            tst_loader.dataset.tokenizer,
+        )
 
         return textIDs, predicted_texts
 
@@ -793,16 +820,8 @@ class r002HeadTailRunner(Runner):
             test_preds_head = torch.cat(test_preds_head)
             test_preds_tail = torch.cat(test_preds_tail)
 
-            predicted_texts = self._get_predicted_texts(
-                test_texts,
-                test_input_ids,
-                test_sentiments,
-                test_preds_head,
-                test_preds_tail,
-                loader.dataset.tokenizer,
-            )
-
-        return textIDs, predicted_texts
+        return textIDs, test_texts, test_input_ids, \
+            test_sentiments, test_preds_head, test_preds_tail
 
     def _get_predicted_texts(self, texts, input_ids, sentiments, y_preds_head,
                              y_preds_tail, tokenizer):
