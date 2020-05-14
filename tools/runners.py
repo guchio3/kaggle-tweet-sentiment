@@ -16,7 +16,8 @@ from tools.datasets import TSEHeadTailDataset, TSESegmentationDataset
 from tools.loggers import myLogger
 from tools.metrics import jaccard
 from tools.models import (BertModelWBinaryMultiLabelClassifierHead,
-                          BertModelWDualMultiClassClassifierHead)
+                          BertModelWDualMultiClassClassifierHead,
+                          RobertaModelWDualMultiClassClassifierHead)
 from tools.schedulers import pass_scheduler
 from tools.splitters import mySplitter
 from torch.nn import BCEWithLogitsLoss, CrossEntropyLoss, Sigmoid, Softmax
@@ -131,12 +132,15 @@ class Runner(object):
             # build model and related objects
             # these objects have state
             model = self._get_model(**self.cfg_model)
+            module = model if self.device == 'cpu' else model.module
+            module.resize_token_embeddings(
+                len(trn_loader.dataset.tokenizer))  # for sentiment
             optimizer = self._get_optimizer(model=model, **self.cfg_optimizer)
             scheduler = self._get_scheduler(optimizer=optimizer,
                                             max_epoch=self.cfg_train['max_epoch'],
                                             **self.cfg_scheduler)
             if self.checkpoint and checkpoint_fold_num == fold_num:
-                model.module.load_state_dict(checkpoint['model_state_dict'])
+                module.load_state_dict(checkpoint['model_state_dict'])
                 optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
                 scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
 
@@ -220,9 +224,17 @@ class Runner(object):
                 num_output_units,
                 pretrained_model_name_or_path
             )
+        elif model_type == 'roberta-headtail':
+            model = RobertaModelWDualMultiClassClassifierHead(
+                num_output_units,
+                pretrained_model_name_or_path
+            )
         else:
             raise Exception(f'invalid model_type: {model_type}')
-        return torch.nn.DataParallel(model)
+        if self.device == 'cpu':
+            return model
+        else:
+            return torch.nn.DataParallel(model)
 
     def _get_optimizer(self, optim_type, lr, model):
         if optim_type == 'sgd':
@@ -309,7 +321,8 @@ class Runner(object):
 
     def _warmup(self, current_epoch, warmup_epoch, model):
         if current_epoch == 0:
-            for name, child in model.module.named_children():
+            module = model if self.device == 'cpu' else model.module
+            for name, child in module.named_children():
                 if 'classifier' in name:
                     self.logger.info(name + ' is unfrozen')
                     for param in child.parameters():
@@ -335,10 +348,11 @@ class Runner(object):
             f'epoch_{current_epoch}_{val_loss:.5f}_{best_thresh:.5f}' \
             f'_{best_jaccard:.5f}_checkpoint.pth'
         # f'_{val_metric:.5f}_checkpoint.pth'
+        module = model if self.device == 'cpu' else model.module
         cp_dict = {
             'fold_num': fold_num,
             'current_epoch': current_epoch,
-            'model_state_dict': model.module.state_dict(),
+            'model_state_dict': module.state_dict(),
             'optimizer_state_dict': optimizer.state_dict(),
             'scheduler_state_dict': scheduler.state_dict(),
             'val_textIDs': val_textIDs,
@@ -581,9 +595,12 @@ class r002HeadTailRunner(Runner):
         # build model and related objects
         # these objects have state
         model = self._get_model(**self.cfg_model)
+        module = model if self.device == 'cpu' else model.module
+        module.resize_token_embeddings(
+            len(tst_loader.dataset.tokenizer))  # for sentiment
 
         if self.checkpoint:
-            model.module.load_state_dict(checkpoint['model_state_dict'])
+            module.load_state_dict(checkpoint['model_state_dict'])
 
         model = model.to(self.device)
 
@@ -672,7 +689,8 @@ class r002HeadTailRunner(Runner):
                 itertools.chain.from_iterable(valid_textIDs_list))
             valid_texts = list(itertools.chain.from_iterable(valid_texts))
             valid_input_ids = torch.cat(valid_input_ids)
-            valid_sentiments = list(itertools.chain.from_iterable(valid_sentiments))
+            valid_sentiments = list(
+                itertools.chain.from_iterable(valid_sentiments))
             valid_selected_texts = list(
                 itertools.chain.from_iterable(valid_selected_texts))
             valid_preds_head = torch.cat(valid_preds_head)

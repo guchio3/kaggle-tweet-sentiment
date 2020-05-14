@@ -4,7 +4,7 @@ import numpy as np
 
 import torch
 from torch.utils.data import Dataset
-from transformers import BertTokenizer
+from transformers import BertTokenizer, RobertaTokenizer
 
 
 class TSEDataset(Dataset):
@@ -13,6 +13,11 @@ class TSEDataset(Dataset):
         self.mode = mode
         if tokenizer_type == 'bert':
             self.tokenizer = BertTokenizer\
+                .from_pretrained(
+                    pretrained_model_name_or_path,
+                    do_lower_case=do_lower_case)
+        elif tokenizer_type == 'roberta':
+            self.tokenizer = RobertaTokenizer\
                 .from_pretrained(
                     pretrained_model_name_or_path,
                     do_lower_case=do_lower_case)
@@ -26,11 +31,11 @@ class TSEDataset(Dataset):
         #     self.df.loc[i, 'text'] = f'[{row["sentiment"]}] ' \
         #         + str(row['text'])
         #     # self.df.loc[i, 'text'] = str(row['text']) + f' [SEP] [{row["sentiment"]}]'
-        # self.tokenizer.add_tokens([
-        #     '[neutral]',
-        #     '[positive]',
-        #     '[negative]',
-        #     ])
+        self.tokenizer.add_tokens([
+            '[neutral]',
+            '[positive]',
+            '[negative]',
+            ])
         self.df['input_ids'] = None
         self.df['labels'] = None
         self.df['attention_mask'] = None
@@ -161,6 +166,7 @@ class TSEHeadTailDataset(TSEDataset):
         text_output = self.tokenizer.encode_plus(
             text=" " + " ".join(row['text'].split()),
             # text_pair=None,
+            # text_pair=f"[{row['sentiment']}]",
             text_pair=f"[{row['sentiment']}]",
             add_special_tokens=True,
             max_length=self.max_length,

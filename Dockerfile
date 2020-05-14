@@ -27,6 +27,7 @@ RUN pip install nlpaug torchcontrib
 
 # pre-install transformers models
 RUN python -c "from transformers import BertModel, BertTokenizer; BertModel.from_pretrained('bert-base-uncased'); BertTokenizer.from_pretrained('bert-base-uncased');"
+RUN python -c "from transformers import RobertaModel, RobertaTokenizer; RobertaModel.from_pretrained('roberta-base'); RobertaTokenizer.from_pretrained('roberta-base');"
 
 # set jupyter notebook
 # jupyter vim key-bind settings
