@@ -172,6 +172,7 @@ class TSEHeadTailDataset(TSEDataset):
         row['input_ids'] = text_output['input_ids']
         row['attention_mask'] = text_output['attention_mask']
         if 'selected_text' not in row:
+            row['selected_text'] = ''
             row['labels_head'] = -1
             row['labels_tail'] = -1
             return row
