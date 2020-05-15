@@ -219,10 +219,8 @@ class RobertaModelWDualMultiClassClassifierHeadV2(nn.Module):
             self.model.pooler.dense.out_features, 128, 2)
         self.classifier_conv_tail = Conv1dSame(
             self.model.pooler.dense.out_features, 128, 2)
-        self.classifier_conv_head_2 = Conv1dSame(
-            self.model.pooler.dense.out_features, 64, 2)
-        self.classifier_conv_tail_2 = Conv1dSame(
-            self.model.pooler.dense.out_features, 64, 2)
+        self.classifier_conv_head_2 = Conv1dSame(128, 64, 2)
+        self.classifier_conv_tail_2 = Conv1dSame(128, 64, 2)
         self.classifier_dense_head = nn.Linear(64, 1)
         self.classifier_dense_tail = nn.Linear(64, 1)
         self.add_module('conv_output_head', self.classifier_conv_head)
@@ -257,10 +255,12 @@ class RobertaModelWDualMultiClassClassifierHeadV2(nn.Module):
         logits_head = self.classifier_conv_head(output)
         logits_head = self.leaky_relu(logits_head)
         logits_head = self.classifier_conv_head_2(logits_head)
+        logits_head = torch.transpose(logits_head, 1, 2)
         logits_head = self.classifier_dense_head(logits_head).squeeze()
         logits_tail = self.classifier_conv_tail(output)
         logits_tail = self.leaky_relu(logits_tail)
         logits_tail = self.classifier_conv_tail_2(logits_tail)
+        logits_tail = torch.transpose(logits_tail, 1, 2)
         logits_tail = self.classifier_dense_tail(logits_tail).squeeze()
 
         # add hidden states and attention if they are here
