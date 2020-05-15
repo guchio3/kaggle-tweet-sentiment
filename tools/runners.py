@@ -802,7 +802,7 @@ class r002HeadTailRunner(Runner):
                 in zip(texts, input_ids, sentiments, selected_texts,
                        y_preds_head, y_preds_tail):
 
-            if sentiment == 'neutral':
+            if self.cfg_train['neutral_origin'] and sentiment == 'neutral':
                 predicted_text = text
             else:
                 pred_label_head = y_pred_head.argmax()
@@ -863,7 +863,7 @@ class r002HeadTailRunner(Runner):
         predicted_texts = []
         for text, input_id, sentiment, y_pred_head, y_pred_tail \
                 in zip(texts, input_ids, sentiments, y_preds_head, y_preds_tail):
-            if sentiment == 'neutral':
+            if self.cfg_train['neutral_origin'] and sentiment == 'neutral':
                 predicted_texts.append(text)
                 continue
             pred_label_head = y_pred_head.argmax()

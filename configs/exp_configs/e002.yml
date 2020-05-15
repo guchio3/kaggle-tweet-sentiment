@@ -31,5 +31,6 @@ train:
     max_epoch: 10
     warmup_epoch: 1
     thresh_unit: 0.05  # no meaning for head tail
+    neutral_origin: true
 invalid_labels:
     - ./inputs/nes_info/invalid_labels.csv
