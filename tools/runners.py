@@ -30,7 +30,7 @@ torch.manual_seed(71)
 
 
 class Runner(object):
-    def __init__(self, exp_id, checkpoint, device, debug, config, TSEDataset):
+    def __init__(self, exp_id, checkpoint, device, debug, config):
         # set logger
         self.exp_time = datetime\
             .datetime.now()\
@@ -39,7 +39,6 @@ class Runner(object):
         self.checkpoint = checkpoint
         self.device = device
         self.debug = debug
-        self.TSEDataset = TSEDataset
         self.logger = myLogger(f'./logs/{self.exp_id}_{self.exp_time}.log')
         self.logger.info(f'exp_id: {exp_id}')
         self.logger.info(f'checkpoint: {checkpoint}')
@@ -69,6 +68,7 @@ class Runner(object):
         }
 
     def train(self):
+        trn_start_time = time.time()
         # load and preprocess train.csv
         trn_df = pd.read_csv('./inputs/origin/train.csv')
         trn_df = trn_df[trn_df.text.notnull()].reset_index(drop=True)
@@ -121,6 +121,9 @@ class Runner(object):
 
             # build loader
             fold_trn_df = trn_df.iloc[trn_idx]
+            if 'rm_neutral' in self.cfg_train \
+                    and self.cfg_train['rm_neutral']:
+                fold_trn_df = fold_trn_df.query('sentiment != "neutral"')
             trn_loader = self._build_loader(mode='train', df=fold_trn_df,
                                             **self.cfg_loader)
             fold_val_df = trn_df.iloc[val_idx]
@@ -207,12 +210,23 @@ class Runner(object):
                 os.remove(left_file)
 
             fold_time = int(time.time() - epoch_start_time) // 60
-            line_message = f'fini fold {fold_num} in {fold_time} min. \n' \
+            line_message = f'{self.exp_id}: fini fold {fold_num} in {fold_time} min. \n' \
                 f'epoch best jaccard: {epoch_best_jaccard}'
             self.logger.send_line_notification(line_message)
 
             if self.cfg_SINGLE_FOLD:
                 break
+
+        fold_best_jacs = []
+        for fold_num in range(self.cfg_split['fold_num']):
+            fold_best_jacs.append(max(self.histories[fold_num]['val_jac']))
+        jac_mean = np.mean(fold_best_jacs)
+        jac_std = np.std(fold_best_jacs)
+
+        trn_time = int(time.time() - trn_start_time) // 60
+        line_message = f'{self.exp_id}: fini all trn. \n' \
+            f'jaccard: {jac_mean}+-{jac_std}' \
+            f'time: {trn_time}'
 
     def _get_fobj(self, fobj_type):
         if fobj_type == 'bce':
@@ -309,8 +323,18 @@ class Runner(object):
         else:
             raise NotImplementedError('mode {mode} is not valid for loader')
 
-        dataset = self.TSEDataset(mode=mode, df=df, logger=self.logger,
-                                  debug=self.debug, **self.cfg_dataset)
+        if self.cfg_dataset['dataset_type'] == 'tse_segmentation_dataset':
+            dataset = TSESegmentationDataset(mode=mode, df=df, logger=self.logger,
+                                             debug=self.debug, **self.cfg_dataset)
+        elif self.cfg_dataset['dataset_type'] == 'tse_headtail_dataset':
+            dataset = TSEHeadTailDataset(mode=mode, df=df, logger=self.logger,
+                                         debug=self.debug, **self.cfg_dataset)
+        elif self.cfg_dataset['dataset_type'] == 'tse_headtail_dataset_v2':
+            dataset = TSEHeadTailDatasetV2(mode=mode, df=df, logger=self.logger,
+                                           debug=self.debug, **self.cfg_dataset)
+        else:
+            raise NotImplementedError()
+
         if sampler_type == 'sequential':
             sampler = SequentialSampler(data_source=dataset)
         elif sampler_type == 'random':
@@ -578,15 +602,6 @@ class r001SegmentationRunner(Runner):
 
 
 class r002HeadTailRunner(Runner):
-    def __init__(self, exp_id, checkpoint, device,
-                 debug, config, dataset=None):
-        if dataset:
-            super().__init__(exp_id, checkpoint, device, debug, config,
-                             dataset)
-        else:
-            super().__init__(exp_id, checkpoint, device, debug, config,
-                             TSEHeadTailDataset)
-
     def predict(self, tst_filename, checkpoints):
         fold_test_preds_heads, fold_test_preds_tails = [], []
         for checkpoint in checkpoints:
@@ -771,6 +786,7 @@ class r002HeadTailRunner(Runner):
     #    best_jaccard = temp_jaccard / len(input_ids)
 
     #    return best_thresh, best_jaccard
+
     def _calc_jaccard(self, texts, input_ids, sentiments, selected_texts,
                       y_preds_head, y_preds_tail, tokenizer, thresh_unit):
 
@@ -853,9 +869,3 @@ class r002HeadTailRunner(Runner):
             predicted_texts.append(predicted_text)
 
         return predicted_texts
-
-
-class r003HeadTailV2Runner(r002HeadTailRunner):
-    def __init__(self, exp_id, checkpoint, device, debug, config):
-        super().__init__(exp_id, checkpoint, device, debug, config,
-                         TSEHeadTailDatasetV2)
