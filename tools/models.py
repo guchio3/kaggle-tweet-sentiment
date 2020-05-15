@@ -223,8 +223,8 @@ class RobertaModelWDualMultiClassClassifierHeadV2(nn.Module):
             self.model.pooler.dense.out_features, 64, 2)
         self.classifier_conv_tail_2 = Conv1dSame(
             self.model.pooler.dense.out_features, 64, 2)
-        self.classifier_dense_head = nn.Dense(64, 1)
-        self.classifier_dense_tail = nn.Dense(64, 1)
+        self.classifier_dense_head = nn.Linear(64, 1)
+        self.classifier_dense_tail = nn.Linear(64, 1)
         self.add_module('conv_output_head', self.classifier_conv_head)
         self.add_module('conv_output_tail', self.classifier_conv_tail)
         self.add_module('conv_output_head_2', self.classifier_conv_head_2)
