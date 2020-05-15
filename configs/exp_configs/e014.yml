@@ -36,7 +36,6 @@ train:
     rm_neutral: false
 predict:
     neutral_origin: false
-    clean_up_tokenization_spaces: false
 invalid_labels:
     - ./inputs/nes_info/invalid_labels.csv
     - ./inputs/nes_info/invalid_labels_v2.csv

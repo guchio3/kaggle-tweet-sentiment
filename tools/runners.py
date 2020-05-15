@@ -586,8 +586,7 @@ class r001SegmentationRunner(Runner):
             for input_id, selected_text_mask, predicted_text_mask in zip(
                     input_ids, selected_text_masks, predicted_text_masks):
                 selected_text = tokenizer.decode(
-                    input_id[selected_text_mask],
-                    clean_up_tokenization_spaces=self.cfg_predict['clean_up_tokenization_spaces'])
+                    input_id[selected_text_mask])
                 # fill continuous zeros between one
                 _non_zeros = predicted_text_mask.nonzero()
                 if _non_zeros.shape[0] > 0:
@@ -596,8 +595,7 @@ class r001SegmentationRunner(Runner):
                     predicted_text_mask[_predicted_text_mask_min:
                                         _predicted_text_mask_max + 1] = True
                 predicted_text = tokenizer.decode(
-                    input_id[predicted_text_mask],
-                    clean_up_tokenization_spaces=self.cfg_predict['clean_up_tokenization_spaces'])
+                    input_id[predicted_text_mask])
                 temp_jaccard += jaccard(selected_text, predicted_text)
 
             temp_jaccard /= len(selected_text_masks)
@@ -815,8 +813,7 @@ class r002HeadTailRunner(Runner):
                     predicted_text = text
                 else:
                     predicted_text = tokenizer.decode(
-                        input_id[pred_label_head:pred_label_tail],
-                        clean_up_tokenization_spaces=self.cfg_predict['clean_up_tokenization_spaces'])
+                        input_id[pred_label_head:pred_label_tail])
             temp_jaccard += jaccard(selected_text, predicted_text)
 
         best_thresh = -1
@@ -877,8 +874,7 @@ class r002HeadTailRunner(Runner):
                 predicted_text = text
             else:
                 predicted_text = tokenizer.decode(
-                    input_id[pred_label_head:pred_label_tail],
-                    clean_up_tokenization_spaces=self.cfg_predict['clean_up_tokenization_spaces'])
+                    input_id[pred_label_head:pred_label_tail])
             predicted_texts.append(predicted_text)
 
         return predicted_texts
