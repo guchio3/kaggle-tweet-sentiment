@@ -18,7 +18,8 @@ from tools.loggers import myLogger
 from tools.metrics import jaccard
 from tools.models import (BertModelWBinaryMultiLabelClassifierHead,
                           BertModelWDualMultiClassClassifierHead,
-                          RobertaModelWDualMultiClassClassifierHead)
+                          RobertaModelWDualMultiClassClassifierHead,
+                          RobertaModelWDualMultiClassClassifierHeadV2)
 from tools.schedulers import pass_scheduler
 from tools.splitters import mySplitter
 from torch.nn import BCEWithLogitsLoss, CrossEntropyLoss, Sigmoid, Softmax
@@ -252,6 +253,11 @@ class Runner(object):
             )
         elif model_type == 'roberta-headtail':
             model = RobertaModelWDualMultiClassClassifierHead(
+                num_output_units,
+                pretrained_model_name_or_path
+            )
+        elif model_type == 'roberta-headtail-v2':
+            model = RobertaModelWDualMultiClassClassifierHeadV2(
                 num_output_units,
                 pretrained_model_name_or_path
             )
