@@ -120,6 +120,8 @@ class Runner(object):
                 fold_trn_df = fold_trn_df.set_index('textID')
                 for invalid_label_csv in self.cfg_invalid_labels:
                     invalid_label_df = pd.read_csv(invalid_label_csv)
+                    invalid_label_df = invalid_label_df\
+                        .query(f'textID in {fold_trn_df.textID.tolist()}')
                     for i, row in invalid_label_df.iterrows():
                         fold_trn_df.loc[row['textID'], 'selected_text'] = \
                             row['guchio_selected_text']
