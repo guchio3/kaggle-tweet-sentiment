@@ -280,7 +280,7 @@ class TSEHeadTailDatasetV2(TSEDataset):
         }
 
     def _prep_text(self, row):
-        if self.add_prefix_space:
+        if self.add_pair_prefix_space:
             sentiment_id = {
                 'positive': [1313],
                 'negative': [2430],
