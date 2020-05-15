@@ -218,7 +218,7 @@ class Runner(object):
                 break
 
         fold_best_jacs = []
-        for fold_num in range(self.cfg_split['fold_num']):
+        for fold_num in range(self.cfg_split['split_num']):
             fold_best_jacs.append(max(self.histories[fold_num]['val_jac']))
         jac_mean = np.mean(fold_best_jacs)
         jac_std = np.std(fold_best_jacs)
