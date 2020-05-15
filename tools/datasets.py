@@ -14,6 +14,7 @@ class TSEDataset(Dataset):
                  do_lower_case, max_length, df,
                  logger=None, debug=False, add_pair_prefix_space=True, **kwargs):
         self.mode = mode
+        self.add_pair_prefix_space = add_pair_prefix_space
         if tokenizer_type == 'bert':
             self.tokenizer = BertTokenizer\
                 .from_pretrained(
@@ -279,7 +280,16 @@ class TSEHeadTailDatasetV2(TSEDataset):
         }
 
     def _prep_text(self, row):
-        sentiment_id = {'positive': [1313], 'negative': [2430], 'neutral': [7974]}
+        if self.add_prefix_space:
+            sentiment_id = {
+                'positive': [1313],
+                'negative': [2430],
+                'neutral': [7974]}
+        else:
+            sentiment_id = {
+                'positive': [22173],
+                'negative': [33407],
+                'neutral': [12516]}
         input_ids = np.ones(self.max_length, dtype='int32')
         attention_mask = np.zeros(self.max_length, dtype='int32')
         # token_type_ids = np.zeros((ct,MAX_LEN),dtype='int32')
