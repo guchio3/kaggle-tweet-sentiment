@@ -11,7 +11,7 @@ from transformers import BertTokenizer, RobertaTokenizer
 
 class TSEDataset(Dataset):
     def __init__(self, mode, tokenizer_type, pretrained_model_name_or_path,
-                 do_lower_case, max_length, df, logger=None, debug=False):
+                 do_lower_case, max_length, df, logger=None, debug=False, **kwargs):
         self.mode = mode
         if tokenizer_type == 'bert':
             self.tokenizer = BertTokenizer\
