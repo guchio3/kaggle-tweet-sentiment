@@ -236,14 +236,14 @@ class TSEHeadTailDataset(TSEDataset):
                 break
 
         if best_matched_cnt == 0:
-            # print('===============================')
-            # print(row)
-            # print('===============================')
-            # print(input_ids)
-            # print(sel_input_ids)
-            # print(selected_text_output['input_ids'])
+            self.logger.debug('===============================')
+            self.logger.debug(row)
+            self.logger.debug('===============================')
+            self.logger.debug(input_ids)
+            self.logger.debug(sel_input_ids)
+            self.logger.debug(selected_text_output['input_ids'])
             # self.logger.warning(f'textID: {row["textID"]} -- no matching.')
-            self.logger.debug(f'textID: {row["textID"]} -- no matching.')
+            # self.logger.debug(f'textID: {row["textID"]} -- no matching.')
 
         row['labels_head'] = best_matched_i
         row['labels_tail'] = best_matched_i + len(sel_input_ids)
