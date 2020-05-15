@@ -47,11 +47,11 @@ class TSEDataset(Dataset):
         #     self.df.loc[i, 'text'] = f'[{row["sentiment"]}] ' \
         #         + str(row['text'])
         #     # self.df.loc[i, 'text'] = str(row['text']) + f' [SEP] [{row["sentiment"]}]'
-        self.tokenizer.add_tokens([
-            '[neutral]',
-            '[positive]',
-            '[negative]',
-        ])
+        # self.tokenizer.add_tokens([
+        #     '[neutral]',
+        #     '[positive]',
+        #     '[negative]',
+        # ])
         self.df['input_ids'] = None
         self.df['labels'] = None
         self.df['attention_mask'] = None
@@ -183,7 +183,7 @@ class TSEHeadTailDataset(TSEDataset):
             text=" " + " ".join(row['text'].split()),
             # text_pair=None,
             # text_pair=f"[{row['sentiment']}]",
-            text_pair=f"[{row['sentiment']}]",
+            text_pair=f"{row['sentiment']}",
             add_special_tokens=True,
             max_length=self.max_length,
             pad_to_max_length=True,
@@ -246,4 +246,88 @@ class TSEHeadTailDataset(TSEDataset):
 
         row['labels_head'] = best_matched_i
         row['labels_tail'] = best_matched_i + len(sel_input_ids)
+        return row
+
+
+class TSEHeadTailDatasetV2(TSEDataset):
+    '''
+    use kernal text preprocess logic
+
+    '''
+
+    def __getitem__(self, idx):
+        row = self.df.loc[idx]
+
+        if row['input_ids'] is None:
+            row = self._prep_text(row)
+            self.df.loc[idx, 'input_ids'] = row['input_ids']
+            self.df.loc[idx, 'labels'] = row['labels']
+            self.df.loc[idx, 'attention_mask'] = row['attention_mask']
+
+        return {
+            'textID': row['textID'],
+            'text': row['text'],
+            'input_ids': torch.tensor(row['input_ids']).long(),
+            'sentiment': row['sentiment'],
+            'attention_mask': torch.tensor(row['attention_mask']).long(),
+            'selected_text': row['selected_text'],
+            'labels_head': torch.tensor(row['labels_head']),
+            'labels_tail': torch.tensor(row['labels_tail']),
+        }
+
+    def _prep_text(self, row):
+        sentiment_id = {'positive': [1313], 'negative': [2430], 'neutral': [7974]}
+        input_ids = np.ones(self.max_length, dtype='int32')
+        attention_mask = np.zeros(self.max_length, dtype='int32')
+        # token_type_ids = np.zeros((ct,MAX_LEN),dtype='int32')
+        # start_tokens = np.zeros(self.max_length, dtype='int32')
+        # end_tokens = np.zeros(self.max_length, dtype='int32')
+
+        # this is test case
+        if 'selected_text' not in row:
+            row['selected_text'] = ''
+
+        # FIND OVERLAP
+        text1 = " " + " ".join(row['text'].split())
+        text2 = " " + " ".join(row['selected_text'].split())
+        idx = text1.find(text2)
+        chars = np.zeros((len(text1)))
+        chars[idx:idx + len(text2)] = 1
+        if text1[idx - 1] == ' ':
+            chars[idx - 1] = 1
+        enc = self.tokenizer.encode(text1)
+
+        # ID_OFFSETS
+        offsets = []
+        idx = 0
+        for t in enc.ids:
+            w = self.tokenizer.decode([t])
+            offsets.append((idx, idx + len(w)))
+            idx += len(w)
+
+        # START END TOKENS
+        toks = []
+        for i, (a, b) in enumerate(offsets):
+            sm = np.sum(chars[a:b])
+            if sm > 0:
+                toks.append(i)
+
+        # s_tok = self.tokenizer.encode(f'[{row["sentiment"]}]').ids
+        s_tok = sentiment_id[row['sentiment']]
+        input_ids[:len(enc.ids) + 5] = [0] + \
+            enc.ids + [2, 2] + s_tok + [2]
+        attention_mask[:len(enc.ids) + 5] = 1
+        # if len(toks) > 0:
+        #     start_tokens[toks[0] + 1] = 1
+        #     end_tokens[toks[-1] + 1] = 1
+
+        row['input_ids'] = input_ids
+        row['attention_mask'] = attention_mask
+        if len(toks) > 0:
+            row['labels_head'] = toks[0] + 1  # +1 は [0] を除去するため
+            row['labels_tail'] = toks[-1] + 1 + 1  # +1+1 は toks[-1] も使うため
+        else:
+            row['labels_head'] = 1
+            row['labels_tail'] = 1 + len(enc.ids)  # == len(offsets)
+
         return row

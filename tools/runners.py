@@ -12,7 +12,8 @@ from tqdm import tqdm
 
 import torch
 import torch.optim as optim
-from tools.datasets import TSEHeadTailDataset, TSESegmentationDataset
+from tools.datasets import (TSEHeadTailDataset, TSEHeadTailDatasetV2,
+                            TSESegmentationDataset)
 from tools.loggers import myLogger
 from tools.metrics import jaccard
 from tools.models import (BertModelWBinaryMultiLabelClassifierHead,
@@ -574,9 +575,14 @@ class r001SegmentationRunner(Runner):
 
 
 class r002HeadTailRunner(Runner):
-    def __init__(self, exp_id, checkpoint, device, debug, config):
-        super().__init__(exp_id, checkpoint, device, debug, config,
-                         TSEHeadTailDataset)
+    def __init__(self, exp_id, checkpoint, device,
+                 debug, config, dataset=None):
+        if dataset:
+            super().__init__(exp_id, checkpoint, device, debug, config,
+                             dataset)
+        else:
+            super().__init__(exp_id, checkpoint, device, debug, config,
+                             TSEHeadTailDataset)
 
     def predict(self, tst_filename, checkpoints):
         fold_test_preds_heads, fold_test_preds_tails = [], []
@@ -775,8 +781,11 @@ class r002HeadTailRunner(Runner):
             else:
                 pred_label_head = y_pred_head.argmax()
                 pred_label_tail = y_pred_tail.argmax()
-                predicted_text = tokenizer.decode(
-                    input_id[pred_label_head:pred_label_tail])
+                if pred_label_head > pred_label_tail:
+                    predicted_text = text
+                else:
+                    predicted_text = tokenizer.decode(
+                        input_id[pred_label_head:pred_label_tail])
             temp_jaccard += jaccard(selected_text, predicted_text)
 
         best_thresh = -1
@@ -833,8 +842,17 @@ class r002HeadTailRunner(Runner):
                 continue
             pred_label_head = y_pred_head.argmax()
             pred_label_tail = y_pred_tail.argmax()
-            predicted_text = tokenizer.decode(
-                input_id[pred_label_head:pred_label_tail])
+            if pred_label_head > pred_label_tail:
+                predicted_text = text
+            else:
+                predicted_text = tokenizer.decode(
+                    input_id[pred_label_head:pred_label_tail])
             predicted_texts.append(predicted_text)
 
         return predicted_texts
+
+
+class r003HeadTailV2Runner(r002HeadTailRunner):
+    def __init__(self, exp_id, checkpoint, device, debug, config):
+        super().__init__(exp_id, checkpoint, device, debug, config,
+                         TSEHeadTailDatasetV2)
