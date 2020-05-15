@@ -1,4 +1,4 @@
-description: "e009 model v2 and neutral origin false and no warmup and clean_up_tokenization_spaces"
+description: "e009 small batch"
 runner: r002
 SINGLE_FOLD: false
 split:
@@ -8,9 +8,9 @@ split:
     random_state: 71
 loader:
     trn_sampler_type: random
-    trn_batch_size: 96
+    trn_batch_size: 16
     tst_sampler_type: sequential
-    tst_batch_size: 96
+    tst_batch_size: 16
 dataset:
     dataset_type: tse_headtail_dataset
     tokenizer_type: roberta_bytelevel_bpe
@@ -19,7 +19,7 @@ dataset:
     add_prefix_space: false
     max_length: 125
 model:
-    model_type: roberta-headtail-v2
+    model_type: roberta-headtail
     pretrained_model_name_or_path: roberta-base
     num_output_units: 125
 fobj:
@@ -31,11 +31,11 @@ scheduler:
     scheduler_type: cosine
 train:
     max_epoch: 5
-    warmup_epoch: 0
+    warmup_epoch: 1
     thresh_unit: 0.05  # no meaning for head tail
     rm_neutral: false
 predict:
-    neutral_origin: false
+    neutral_origin: true
 invalid_labels:
     - ./inputs/nes_info/invalid_labels.csv
     - ./inputs/nes_info/invalid_labels_v2.csv
