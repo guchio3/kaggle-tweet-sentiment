@@ -11,7 +11,8 @@ from transformers import BertTokenizer, RobertaTokenizer
 
 class TSEDataset(Dataset):
     def __init__(self, mode, tokenizer_type, pretrained_model_name_or_path,
-                 do_lower_case, max_length, df, logger=None, debug=False, **kwargs):
+                 do_lower_case, max_length, df,
+                 logger=None, debug=False, add_prefix_space=True, **kwargs):
         self.mode = mode
         if tokenizer_type == 'bert':
             self.tokenizer = BertTokenizer\
@@ -28,14 +29,14 @@ class TSEDataset(Dataset):
                 vocab_file=f'{pretrained_model_name_or_path}/bert/tokenizer/vocab.json',
                 # merges_file=f'{pretrained_model_name_or_path}/bert/tokenizer/merges.txt',
                 lowercase=do_lower_case,
-                add_prefix_space=True
+                add_prefix_space=add_prefix_space
             )
         elif tokenizer_type == 'roberta_bytelevel_bpe':
             self.tokenizer = myRobertaByteLevelBPETokenizer(
                 vocab_file=f'{pretrained_model_name_or_path}/roberta/tokenizer/vocab.json',
                 merges_file=f'{pretrained_model_name_or_path}/roberta/tokenizer/merges.txt',
                 lowercase=do_lower_case,
-                add_prefix_space=True
+                add_prefix_space=add_prefix_space
             )
         else:
             err_msg = f'{tokenizer_type} is not ' \

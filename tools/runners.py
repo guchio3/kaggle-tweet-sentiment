@@ -39,7 +39,8 @@ class Runner(object):
         self.checkpoint = checkpoint
         self.device = device
         self.debug = debug
-        self.logger = myLogger(f'./logs/{self.exp_id}_{self.exp_time}.log')
+        # self.logger = myLogger(f'./logs/{self.exp_id}_{self.exp_time}.log')
+        self.logger = myLogger(f'./logs/{self.exp_id}.log')
         self.logger.info(f'exp_id: {exp_id}')
         self.logger.info(f'checkpoint: {checkpoint}')
         self.logger.info(f'debug: {debug}')
