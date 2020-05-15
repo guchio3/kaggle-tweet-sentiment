@@ -12,9 +12,8 @@ from transformers import BertTokenizer, RobertaTokenizer
 class TSEDataset(Dataset):
     def __init__(self, mode, tokenizer_type, pretrained_model_name_or_path,
                  do_lower_case, max_length, df,
-                 logger=None, debug=False, add_prefix_space=True, **kwargs):
+                 logger=None, debug=False, add_pair_prefix_space=True, **kwargs):
         self.mode = mode
-        self.add_prefix_space = add_prefix_space
         if tokenizer_type == 'bert':
             self.tokenizer = BertTokenizer\
                 .from_pretrained(
@@ -30,14 +29,14 @@ class TSEDataset(Dataset):
                 vocab_file=f'{pretrained_model_name_or_path}/bert/tokenizer/vocab.json',
                 # merges_file=f'{pretrained_model_name_or_path}/bert/tokenizer/merges.txt',
                 lowercase=do_lower_case,
-                add_prefix_space=add_prefix_space
+                add_prefix_space=add_pair_prefix_space
             )
         elif tokenizer_type == 'roberta_bytelevel_bpe':
             self.tokenizer = myRobertaByteLevelBPETokenizer(
                 vocab_file=f'{pretrained_model_name_or_path}/roberta/tokenizer/vocab.json',
                 merges_file=f'{pretrained_model_name_or_path}/roberta/tokenizer/merges.txt',
                 lowercase=do_lower_case,
-                add_prefix_space=add_prefix_space
+                add_prefix_space=add_pair_prefix_space
             )
         else:
             err_msg = f'{tokenizer_type} is not ' \
@@ -181,9 +180,7 @@ class TSEHeadTailDataset(TSEDataset):
         }
 
     def _prep_text(self, row):
-        text = " ".join(row['text'].split())
-        if self.add_prefix_space:
-            text = " " + text
+        text = " " + " ".join(row['text'].split())
         text_output = self.tokenizer.encode_plus(
             text=text,
             # text_pair=None,
@@ -204,9 +201,7 @@ class TSEHeadTailDataset(TSEDataset):
             row['labels_tail'] = -1
             return row
 
-        text = " ".join(row['selected_text'].split())
-        if self.add_prefix_space:
-            text = " " + text
+        text = " " + " ".join(row['selected_text'].split())
         selected_text_output = self.tokenizer.encode_plus(
             text=text,
             text_pair=None,
@@ -296,11 +291,8 @@ class TSEHeadTailDatasetV2(TSEDataset):
             row['selected_text'] = ''
 
         # FIND OVERLAP
-        text1 = " ".join(row['text'].split())
-        text2 = " ".join(row['selected_text'].split())
-        if self.add_prefix_space:
-            text1 = " " + text1
-            text2 = " " + text2
+        text1 = " " + " ".join(row['text'].split())
+        text2 = " " + " ".join(row['selected_text'].split())
         idx = text1.find(text2)
         chars = np.zeros((len(text1)))
         chars[idx:idx + len(text2)] = 1
