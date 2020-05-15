@@ -54,8 +54,12 @@ class BertModelWDualMultiClassClassifierHead(nn.Module):
     def __init__(self, num_labels, pretrained_model_name_or_path):
         super().__init__()
         if pretrained_model_name_or_path:
-            self.model = BertModel.from_pretrained(
-                pretrained_model_name_or_path)
+            if type(pretrained_model_name_or_path) == 'str':
+                self.model = BertModel.from_pretrained(
+                    pretrained_model_name_or_path)
+            else:
+                # for sub
+                self.model = BertModel(pretrained_model_name_or_path)
         else:
             raise NotImplementedError
         self.num_labels = num_labels

@@ -202,6 +202,9 @@ class Runner(object):
             os.rename(
                 best_filename,
                 f'./checkpoints/{self.exp_id}/best/{best_filename.split("/")[-1]}')
+            left_files = glob(f'./checkpoints/{self.exp_id}/{fold_num}/*')
+            for left_file in left_files:
+                os.remove(left_file)
 
             fold_time = int(time.time() - epoch_start_time) // 60
             line_message = f'fini fold {fold_num} in {fold_time} min. \n' \
