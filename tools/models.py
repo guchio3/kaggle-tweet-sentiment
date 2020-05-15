@@ -54,7 +54,7 @@ class BertModelWDualMultiClassClassifierHead(nn.Module):
     def __init__(self, num_labels, pretrained_model_name_or_path):
         super().__init__()
         if pretrained_model_name_or_path:
-            if type(pretrained_model_name_or_path) == 'str':
+            if type(pretrained_model_name_or_path) == str:
                 self.model = BertModel.from_pretrained(
                     pretrained_model_name_or_path)
             else:
@@ -116,8 +116,12 @@ class RobertaModelWDualMultiClassClassifierHead(nn.Module):
     def __init__(self, num_labels, pretrained_model_name_or_path):
         super().__init__()
         if pretrained_model_name_or_path:
-            self.model = RobertaModel.from_pretrained(
-                pretrained_model_name_or_path)
+            if type(pretrained_model_name_or_path) == str:
+                self.model = RobertaModel.from_pretrained(
+                    pretrained_model_name_or_path)
+            else:
+                # for sub
+                self.model = RobertaModel(pretrained_model_name_or_path)
         else:
             raise NotImplementedError
         self.num_labels = num_labels
