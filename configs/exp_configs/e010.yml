@@ -34,7 +34,9 @@ train:
     warmup_epoch: 1
     thresh_unit: 0.05  # no meaning for head tail
     rm_neutral: false
+predict:
     neutral_origin: true
+    clean_up_tokenization_spaces: true
 invalid_labels:
     - ./inputs/nes_info/invalid_labels.csv
     - ./inputs/nes_info/invalid_labels_v2.csv
