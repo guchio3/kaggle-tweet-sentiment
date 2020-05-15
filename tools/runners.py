@@ -60,6 +60,7 @@ class Runner(object):
         self.cfg_optimizer = config['optimizer']
         self.cfg_scheduler = config['scheduler']
         self.cfg_train = config['train']
+        self.cfg_predict = config['predict']
         self.cfg_invalid_labels = config['invalid_labels'] \
             if 'invalid_labels' in config else None
 
