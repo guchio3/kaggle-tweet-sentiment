@@ -117,11 +117,12 @@ class Runner(object):
             # build loader
             fold_trn_df = trn_df.iloc[trn_idx]
             if self.cfg_invalid_labels:
+                fold_trn_textIDs = fold_trn_df.textID.tolist()
                 fold_trn_df = fold_trn_df.set_index('textID')
                 for invalid_label_csv in self.cfg_invalid_labels:
                     invalid_label_df = pd.read_csv(invalid_label_csv)
                     invalid_label_df = invalid_label_df\
-                        .query(f'textID in {fold_trn_df.textID.tolist()}')
+                        .query(f'textID in {fold_trn_textIDs}')
                     for i, row in invalid_label_df.iterrows():
                         fold_trn_df.loc[row['textID'], 'selected_text'] = \
                             row['guchio_selected_text']
