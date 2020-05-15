@@ -123,6 +123,7 @@ class Runner(object):
                     for i, row in invalid_label_df.iterrows():
                         fold_trn_df.loc[row['textID'], 'selected_text'] = \
                             row['guchio_selected_text']
+                fold_trn_df = fold_trn_df.reset_index()
 
             if 'rm_neutral' in self.cfg_train \
                     and self.cfg_train['rm_neutral']:
