@@ -75,14 +75,6 @@ class Runner(object):
         # load and preprocess train.csv
         trn_df = pd.read_csv('./inputs/origin/train.csv')
         trn_df = trn_df[trn_df.text.notnull()].reset_index(drop=True)
-        if self.cfg_invalid_labels:
-            trn_df = trn_df.set_index('textID')
-            for invalid_label_csv in self.cfg_invalid_labels:
-                invalid_label_df = pd.read_csv(invalid_label_csv)
-                for i, row in invalid_label_df.iterrows():
-                    trn_df.loc[row['textID'], 'selected_text'] = \
-                        row['guchio_selected_text']
-            trn_df = trn_df.reset_index()
 
         # split data
         splitter = mySplitter(**self.cfg_split, logger=self.logger)
@@ -124,6 +116,14 @@ class Runner(object):
 
             # build loader
             fold_trn_df = trn_df.iloc[trn_idx]
+            if self.cfg_invalid_labels:
+                fold_trn_df = fold_trn_df.set_index('textID')
+                for invalid_label_csv in self.cfg_invalid_labels:
+                    invalid_label_df = pd.read_csv(invalid_label_csv)
+                    for i, row in invalid_label_df.iterrows():
+                        fold_trn_df.loc[row['textID'], 'selected_text'] = \
+                            row['guchio_selected_text']
+
             if 'rm_neutral' in self.cfg_train \
                     and self.cfg_train['rm_neutral']:
                 fold_trn_df = fold_trn_df.query('sentiment != "neutral"')
