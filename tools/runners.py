@@ -235,9 +235,9 @@ class Runner(object):
         line_message = \
             f'----------------------- \n' \
             f'{self.exp_id}: fini all trn. \n' \
-            f'jaccard      : {jac_mean}+-{jac_std} \n' \
+            f'jaccard      : {jac_mean:.5f}+-{jac_std:.5f} \n' \
             f'best_jacs    : {fold_best_jacs} \n' \
-            f'time         : {trn_time} \n' \
+            f'time         : {trn_time} min \n' \
             f'-----------------------'
         self.logger.send_line_notification(line_message)
 
