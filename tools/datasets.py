@@ -12,12 +12,7 @@ from transformers import BertTokenizer, RobertaTokenizer
 class TSEDataset(Dataset):
     def __init__(self, mode, tokenizer_type, pretrained_model_name_or_path,
                  do_lower_case, max_length, df,
-                 logger=None, debug=False, add_pair_prefix_space=True,
-                 dataset_type=None):
-        '''
-        dataset_type is dummy. not using **kwargs because it causes bugs.
-
-        '''
+                 logger=None, debug=False, add_pair_prefix_space=True):
         self.mode = mode
         self.add_pair_prefix_space = add_pair_prefix_space
         if tokenizer_type == 'bert':

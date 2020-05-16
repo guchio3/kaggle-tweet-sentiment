@@ -10,8 +10,8 @@ loader:
     trn_batch_size: 48
     tst_sampler_type: sequential
     tst_batch_size: 48
-dataset:
     dataset_type: tse_segmentation_dataset
+dataset:
     tokenizer_type: bert
     pretrained_model_name_or_path: bert-base-uncased
     do_lower_case: true

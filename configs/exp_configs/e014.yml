@@ -11,8 +11,8 @@ loader:
     trn_batch_size: 16
     tst_sampler_type: sequential
     tst_batch_size: 16
-dataset:
     dataset_type: tse_headtail_dataset
+dataset:
     tokenizer_type: roberta_bytelevel_bpe
     pretrained_model_name_or_path: ./inputs/datasets/
     do_lower_case: true

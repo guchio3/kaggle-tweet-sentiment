@@ -346,13 +346,13 @@ class Runner(object):
         else:
             raise NotImplementedError('mode {mode} is not valid for loader')
 
-        if self.cfg_dataset['dataset_type'] == 'tse_segmentation_dataset':
+        if self.cfg_loader['dataset_type'] == 'tse_segmentation_dataset':
             dataset = TSESegmentationDataset(mode=mode, df=df, logger=self.logger,
                                              debug=self.debug, **self.cfg_dataset)
-        elif self.cfg_dataset['dataset_type'] == 'tse_headtail_dataset':
+        elif self.cfg_loader['dataset_type'] == 'tse_headtail_dataset':
             dataset = TSEHeadTailDataset(mode=mode, df=df, logger=self.logger,
                                          debug=self.debug, **self.cfg_dataset)
-        elif self.cfg_dataset['dataset_type'] == 'tse_headtail_dataset_v2':
+        elif self.cfg_loader['dataset_type'] == 'tse_headtail_dataset_v2':
             dataset = TSEHeadTailDatasetV2(mode=mode, df=df, logger=self.logger,
                                            debug=self.debug, **self.cfg_dataset)
         else:
