@@ -89,12 +89,7 @@ class Runner(object):
             self.logger.info(f'loading checkpoint from {self.checkpoint} ...')
             checkpoint = torch.load(self.checkpoint)
             checkpoint_fold_num = checkpoint['fold_num']
-            checkpoint_epoch = checkpoint['current_epoch']
             self.histories = checkpoint['histories']
-            iter_epochs = range(checkpoint_epoch,
-                                self.cfg_train['max_epoch'], 1)
-        else:
-            iter_epochs = range(0, self.cfg_train['max_epoch'], 1)
 
         for fold_num, (trn_idx, val_idx) in enumerate(fold):
             if (self.checkpoint and fold_num < checkpoint_fold_num) \
@@ -154,6 +149,12 @@ class Runner(object):
                 module.load_state_dict(checkpoint['model_state_dict'])
                 optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
                 scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
+                checkpoint_epoch = checkpoint['current_epoch']
+                iter_epochs = range(checkpoint_epoch,
+                                    self.cfg_train['max_epoch'], 1)
+            else:
+                checkpoint_epoch = -1
+                iter_epochs = range(0, self.cfg_train['max_epoch'], 1)
 
             epoch_start_time = time.time()
             epoch_best_jaccard = -1
@@ -231,9 +232,12 @@ class Runner(object):
         jac_std = np.std(fold_best_jacs)
 
         trn_time = int(time.time() - trn_start_time) // 60
-        line_message = f'{self.exp_id}: fini all trn. \n' \
+        line_message = '-----------------------' \
+            f'{self.exp_id}: fini all trn. \n' \
             f'jaccard: {jac_mean}+-{jac_std}' \
-            f'time: {trn_time}'
+            f'time: {trn_time}' \
+            '-----------------------'
+        self.logger.send_line_notification(line_message)
 
     def _get_fobj(self, fobj_type):
         if fobj_type == 'bce':
