@@ -127,7 +127,7 @@ class TSESegmentationDataset(TSEDataset):
 
             if best_matched_cnt < matched_cnt:
                 best_matched_cnt = matched_cnt
-                best_matched_i = i + 1   # $BH4$$$?;~$NOC$J$N$G(B
+                best_matched_i = i + 1   # 抜いた時の話なので
             if best_matched_cnt == len(sel_input_ids):
                 break
             # if input_id_i == sel_input_ids[0]:
@@ -217,12 +217,14 @@ class TSEHeadTailDataset(TSEDataset):
         # allign labels for segmentation
         input_ids = text_output['input_ids']
         sel_input_ids = selected_text_output['input_ids']
-        matched_cnt = len([i for i in input_ids[:len(sel_input_ids)]
+        # 1 start なのは、先頭の token をスルーするため
+        matched_cnt = len([i for i in input_ids[1:1+len(sel_input_ids)]
                            if i in sel_input_ids])
         best_matched_cnt = matched_cnt
-        best_matched_i = 0
+        best_matched_i = 1
         # for i in range(0, len(input_ids)):
-        for i in range(0, len(input_ids) - len(sel_input_ids)):
+        # 1 start なのは、先頭の token をスルーするため
+        for i in range(1, len(input_ids) - len(sel_input_ids)):
             head_input_id_i = input_ids[i]
             tail_input_id_i = input_ids[i + len(sel_input_ids)]
             if head_input_id_i in sel_input_ids:
@@ -234,7 +236,7 @@ class TSEHeadTailDataset(TSEDataset):
 
             if best_matched_cnt < matched_cnt:
                 best_matched_cnt = matched_cnt
-                best_matched_i = i + 1   # $BH4$$$?;~$NOC$J$N$G(B
+                best_matched_i = i + 1   # 抜いた時の話なので
             if best_matched_cnt == len(sel_input_ids):
                 break
 
@@ -337,8 +339,8 @@ class TSEHeadTailDatasetV2(TSEDataset):
         row['input_ids'] = input_ids
         row['attention_mask'] = attention_mask
         if len(toks) > 0:
-            row['labels_head'] = toks[0] + 1  # +1 $B$O(B [0] $B$r=|5n$9$k$?$a(B
-            row['labels_tail'] = toks[-1] + 1 + 1  # +1+1 $B$O(B toks[-1] $B$b;H$&$?$a(B
+            row['labels_head'] = toks[0] + 1  # +1 は [0] を除去するため
+            row['labels_tail'] = toks[-1] + 1 + 1  # +1+1 は toks[-1] も使うため
         else:
             row['labels_head'] = 1
             row['labels_tail'] = 1 + len(enc.ids)  # == len(offsets)
