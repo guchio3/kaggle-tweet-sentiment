@@ -1,4 +1,4 @@
-description: "e007, ignore <s> using 1 start"
+description: "e020 tail predict"
 runner: r002
 SINGLE_FOLD: false
 split:
@@ -36,6 +36,6 @@ train:
     rm_neutral: false
 predict:
     neutral_origin: true
-    head_tail_equal_handle: nothing
+    head_tail_equal_handle: tail
 invalid_labels:
     # - ./inputs/nes_info/invalid_labels.csv

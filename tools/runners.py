@@ -542,16 +542,14 @@ class r001SegmentationRunner(Runner):
             valid_input_ids = torch.cat(valid_input_ids)
             valid_preds = torch.cat(valid_preds)
             valid_labels = torch.cat(valid_labels)
-            # valid_jac = self._calc_jac(
-            #     valid_preds, valid_labels
-            # )
 
             best_thresh, best_jaccard = \
                 self._calc_jaccard(valid_input_ids,
                                    valid_labels.bool(),
                                    valid_preds,
                                    loader.dataset.tokenizer,
-                                   self.cfg_train['thresh_unit'])
+                                   self.cfg_train['thresh_unit'],
+                                   **self.cfg_predict)
 
         return valid_loss, best_thresh, best_jaccard, valid_textIDs, \
             valid_input_ids, valid_preds, valid_labels
@@ -680,6 +678,7 @@ class r002HeadTailRunner(Runner):
             avg_test_preds_head,
             avg_test_preds_tail,
             tst_loader.dataset.tokenizer,
+            **self.cfg_predict,
         )
 
         return textIDs, predicted_texts
@@ -784,7 +783,8 @@ class r002HeadTailRunner(Runner):
                                    valid_preds_head,
                                    valid_preds_tail,
                                    loader.dataset.tokenizer,
-                                   self.cfg_train['thresh_unit'])
+                                   self.cfg_train['thresh_unit'],
+                                   **self.cfg_predict)
 
         valid_preds = (valid_preds_head, valid_preds_tail)
         valid_labels = (valid_labels_head, valid_labels_tail)
@@ -812,24 +812,54 @@ class r002HeadTailRunner(Runner):
 
     #    return best_thresh, best_jaccard
 
+    def _get_predicted_texts(self, texts, input_ids, sentiments, y_preds_head,
+                             y_preds_tail, tokenizer,
+                             neutral_origin=False, head_tail_equal_handle='tail'):
+        predicted_texts = []
+        for text, input_id, sentiment, y_pred_head, y_pred_tail \
+                in zip(texts, input_ids, sentiments, y_preds_head, y_preds_tail):
+            if neutral_origin and sentiment == 'neutral':
+                predicted_texts.append(text)
+                continue
+            pred_label_head = y_pred_head.argmax()
+            pred_label_tail = y_pred_tail.argmax()
+            if pred_label_head > pred_label_tail or len(text.split()) < 2:
+                predicted_text = text
+            elif pred_label_head == pred_label_tail:
+                if head_tail_equal_handle == 'nothing':
+                    predicted_text = ''
+                elif head_tail_equal_handle == 'head':
+                    predicted_text = tokenizer.decode(
+                        input_id[pred_label_head:pred_label_tail + 1])
+                elif head_tail_equal_handle == 'tail':
+                    predicted_text = tokenizer.decode(
+                        input_id[pred_label_head - 1:pred_label_tail])
+                else:
+                    raise NotImplementedError()
+            else:
+                predicted_text = tokenizer.decode(
+                    input_id[pred_label_head:pred_label_tail])
+            predicted_texts.append(predicted_text)
+
+        return predicted_texts
+
     def _calc_jaccard(self, texts, input_ids, sentiments, selected_texts,
-                      y_preds_head, y_preds_tail, tokenizer, thresh_unit):
+                      y_preds_head, y_preds_tail, tokenizer, thresh_unit,
+                      neutral_origin=False, head_tail_equal_handle='tail'):
 
         temp_jaccard = 0
-        for text, input_id, sentiment, selected_text, y_pred_head, y_pred_tail \
-                in zip(texts, input_ids, sentiments, selected_texts,
-                       y_preds_head, y_preds_tail):
-
-            if self.cfg_predict['neutral_origin'] and sentiment == 'neutral':
-                predicted_text = text
-            else:
-                pred_label_head = y_pred_head.argmax()
-                pred_label_tail = y_pred_tail.argmax()
-                if pred_label_head > pred_label_tail:
-                    predicted_text = text
-                else:
-                    predicted_text = tokenizer.decode(
-                        input_id[pred_label_head:pred_label_tail])
+        predicted_texts = self._get_predicted_texts(
+            texts,
+            input_ids,
+            sentiments,
+            y_preds_head,
+            y_preds_tail,
+            tokenizer,
+            neutral_origin,
+            head_tail_equal_handle,
+        )
+        for selected_text, predicted_text in zip(
+                selected_texts, predicted_texts):
             temp_jaccard += jaccard(selected_text, predicted_text)
 
         best_thresh = -1
@@ -875,22 +905,3 @@ class r002HeadTailRunner(Runner):
 
         return textIDs, test_texts, test_input_ids, \
             test_sentiments, test_preds_head, test_preds_tail
-
-    def _get_predicted_texts(self, texts, input_ids, sentiments, y_preds_head,
-                             y_preds_tail, tokenizer):
-        predicted_texts = []
-        for text, input_id, sentiment, y_pred_head, y_pred_tail \
-                in zip(texts, input_ids, sentiments, y_preds_head, y_preds_tail):
-            if self.cfg_predict['neutral_origin'] and sentiment == 'neutral':
-                predicted_texts.append(text)
-                continue
-            pred_label_head = y_pred_head.argmax()
-            pred_label_tail = y_pred_tail.argmax()
-            if pred_label_head > pred_label_tail:
-                predicted_text = text
-            else:
-                predicted_text = tokenizer.decode(
-                    input_id[pred_label_head:pred_label_tail])
-            predicted_texts.append(predicted_text)
-
-        return predicted_texts
