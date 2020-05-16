@@ -333,7 +333,8 @@ class Runner(object):
 
     def _build_loader(self, mode, df,
                       trn_sampler_type, trn_batch_size,
-                      tst_sampler_type, tst_batch_size
+                      tst_sampler_type, tst_batch_size,
+                      dataset_type
                       ):
         if mode == 'train':
             sampler_type = trn_sampler_type
@@ -346,13 +347,13 @@ class Runner(object):
         else:
             raise NotImplementedError('mode {mode} is not valid for loader')
 
-        if self.cfg_loader['dataset_type'] == 'tse_segmentation_dataset':
+        if dataset_type == 'tse_segmentation_dataset':
             dataset = TSESegmentationDataset(mode=mode, df=df, logger=self.logger,
                                              debug=self.debug, **self.cfg_dataset)
-        elif self.cfg_loader['dataset_type'] == 'tse_headtail_dataset':
+        elif dataset_type == 'tse_headtail_dataset':
             dataset = TSEHeadTailDataset(mode=mode, df=df, logger=self.logger,
                                          debug=self.debug, **self.cfg_dataset)
-        elif self.cfg_loader['dataset_type'] == 'tse_headtail_dataset_v2':
+        elif dataset_type == 'tse_headtail_dataset_v2':
             dataset = TSEHeadTailDatasetV2(mode=mode, df=df, logger=self.logger,
                                            debug=self.debug, **self.cfg_dataset)
         else:
