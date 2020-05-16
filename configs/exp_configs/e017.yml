@@ -16,7 +16,7 @@ dataset:
     tokenizer_type: roberta_bytelevel_bpe
     pretrained_model_name_or_path: ./inputs/datasets/
     do_lower_case: true
-    add_pair_prefix_space: false
+    add_pair_prefix_space: true
     max_length: 96
 model:
     model_type: roberta-headtail-v2
