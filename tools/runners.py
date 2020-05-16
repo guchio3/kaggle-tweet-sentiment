@@ -185,7 +185,7 @@ class Runner(object):
                     + f'val loss: {val_loss:.5f} / '
                     + f'best val thresh: {best_thresh:.5f} / '
                     + f'best val jaccard: {best_jaccard:.5f} / '
-                    + f'lr: {optimizer.param_groups[0]["lr"]:.5f} / '
+                    + f'lr: {optimizer.param_groups[0]["lr"]:.6f} / '
                     + f'time: {int(time.time()-start_time)}sec')
 
                 self.histories[fold_num]['trn_loss'].append(trn_loss)
@@ -325,7 +325,7 @@ class Runner(object):
             #     [http://katsura-jp.hatenablog.com/entry/2019/01/30/183501]
             # if you want to use cosine annealing, use below scheduler.
             scheduler = optim.lr_scheduler.CosineAnnealingLR(
-                optimizer, T_max=max_epoch, eta_min=0.00002
+                optimizer, T_max=max_epoch, eta_min=0.00001
             )
         else:
             raise Exception(f'invalid scheduler_type: {scheduler_type}')
