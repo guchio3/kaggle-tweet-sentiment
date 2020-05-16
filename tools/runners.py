@@ -711,7 +711,7 @@ class r002HeadTailRunner(Runner):
 
     def _valid_loop(self, model, fobj, loader):
         model.eval()
-        softmax = Softmax()
+        softmax = Softmax(dim=1)
         running_loss = 0
 
         valid_textIDs_list = []
@@ -740,8 +740,8 @@ class r002HeadTailRunner(Runner):
                 running_loss += valid_loss.item()
 
                 # _, predicted = torch.max(outputs.data, 1)
-                predicted_head = softmax(logits_head.data, dim=1)
-                predicted_tail = softmax(logits_tail.data, dim=1)
+                predicted_head = softmax(logits_head.data)
+                predicted_tail = softmax(logits_tail.data)
 
                 valid_textIDs_list.append(textIDs)
                 valid_texts.append(valid_text)
@@ -833,7 +833,7 @@ class r002HeadTailRunner(Runner):
 
     def _test_loop(self, model, loader):
         model.eval()
-        softmax = Softmax()
+        softmax = Softmax(dim=1)
 
         with torch.no_grad():
             textIDs, test_texts, test_input_ids, test_sentiments, test_preds_head, test_preds_tail = [], [], [], [], [], []
@@ -850,8 +850,8 @@ class r002HeadTailRunner(Runner):
                 )
                 logits_head, logits_tail = logits
 
-                predicted_head = softmax(logits_head.data, dim=1)
-                predicted_tail = softmax(logits_tail.data, dim=1)
+                predicted_head = softmax(logits_head.data)
+                predicted_tail = softmax(logits_tail.data)
 
                 test_texts.append(test_text)
                 textIDs.append(textID)
