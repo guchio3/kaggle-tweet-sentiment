@@ -8,9 +8,9 @@ split:
     random_state: 71
 loader:
     trn_sampler_type: random
-    trn_batch_size: 96
+    trn_batch_size: 8
     tst_sampler_type: sequential
-    tst_batch_size: 96
+    tst_batch_size: 8
 dataset:
     dataset_type: tse_headtail_dataset
     tokenizer_type: roberta_bytelevel_bpe
