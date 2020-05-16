@@ -232,11 +232,13 @@ class Runner(object):
         jac_std = np.std(fold_best_jacs)
 
         trn_time = int(time.time() - trn_start_time) // 60
-        line_message = '-----------------------' \
+        line_message = \
+            f'----------------------- \n' \
             f'{self.exp_id}: fini all trn. \n' \
-            f'jaccard: {jac_mean}+-{jac_std}' \
-            f'time: {trn_time}' \
-            '-----------------------'
+            f'jaccard      : {jac_mean}+-{jac_std} \n' \
+            f'best_jacs    : {fold_best_jacs} \n' \
+            f'time         : {trn_time} \n' \
+            f'-----------------------'
         self.logger.send_line_notification(line_message)
 
     def _get_fobj(self, fobj_type):
