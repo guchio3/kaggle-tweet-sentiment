@@ -738,8 +738,8 @@ class r002HeadTailRunner(Runner):
                 running_loss += valid_loss.item()
 
                 # _, predicted = torch.max(outputs.data, 1)
-                predicted_head = softmax(logits_head.data)
-                predicted_tail = softmax(logits_tail.data)
+                predicted_head = softmax(logits_head.data, dim=1)
+                predicted_tail = softmax(logits_tail.data, dim=1)
 
                 valid_textIDs_list.append(textIDs)
                 valid_texts.append(valid_text)
@@ -848,8 +848,8 @@ class r002HeadTailRunner(Runner):
                 )
                 logits_head, logits_tail = logits
 
-                predicted_head = softmax(logits_head.data)
-                predicted_tail = softmax(logits_tail.data)
+                predicted_head = softmax(logits_head.data, dim=1)
+                predicted_tail = softmax(logits_tail.data, dim=1)
 
                 test_texts.append(test_text)
                 textIDs.append(textID)
