@@ -41,10 +41,10 @@ class myBertByteLevelBPETokenizer(ByteLevelBPETokenizer):
 
         return res
 
-    def decode(self, input_ids, **kwargs):
+    def decode(self, input_ids):
         if isinstance(input_ids, torch.Tensor):
             input_ids = input_ids.long().tolist()
-        return super().decode(input_ids, **kwargs)
+        return super().decode(input_ids)
 
 
 class myRobertaByteLevelBPETokenizer(ByteLevelBPETokenizer):
@@ -94,7 +94,7 @@ class myRobertaByteLevelBPETokenizer(ByteLevelBPETokenizer):
 
         return res
 
-    def decode(self, input_ids, **kwargs):
+    def decode(self, input_ids):
         if isinstance(input_ids, torch.Tensor):
             input_ids = input_ids.long().tolist()
-        return super().decode(input_ids, **kwargs)
+        return super().decode(input_ids)
