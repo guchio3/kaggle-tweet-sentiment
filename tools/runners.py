@@ -308,9 +308,9 @@ class Runner(object):
             scheduler = pass_scheduler()
         elif scheduler_type == 'every_step':
             scheduler = optim.lr_scheduler.LambdaLR(
-                    optimizer,
-                    lr_lambda=lambda epoch: 3e-5 * 0.2**epoch,
-                    )
+                optimizer,
+                lr_lambda=lambda epoch: 0.2**epoch,
+            )
         elif scheduler_type == 'multistep':
             scheduler = optim.lr_scheduler.MultiStepLR(
                 optimizer,
