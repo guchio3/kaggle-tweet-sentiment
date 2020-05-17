@@ -1,4 +1,4 @@
-description: "e024 no warmup + every_step scheduler + larger lr"
+description: "e024 no warmup + every_step scheduler 0.35 + larger lr"
 runner: r002
 SINGLE_FOLD: false
 split:
@@ -26,11 +26,10 @@ fobj:
     fobj_type: ce
 optimizer:
     optim_type: adam
-    # lr: 0.00005
-    lr: 0.0001
+    lr: 0.00005
 scheduler:
     scheduler_type: every_step
-    every_step_unit: 0.2
+    every_step_unit: 0.35
 train:
     max_epoch: 5
     warmup_epoch: 0
