@@ -339,14 +339,14 @@ class Runner(object):
             raise Exception(f'invalid optim_type: {optim_type}')
         return optimizer
 
-    def _get_scheduler(self, scheduler_type, max_epoch, optimizer):
+    def _get_scheduler(self, scheduler_type, max_epoch,
+                       optimizer, every_step_unit, cosine_eta_min):
         if scheduler_type == 'pass':
             scheduler = pass_scheduler()
         elif scheduler_type == 'every_step':
             scheduler = optim.lr_scheduler.LambdaLR(
                 optimizer,
-                lr_lambda=lambda epoch: 0.02**epoch,
-                # lr_lambda=lambda epoch: 0.2**epoch,
+                lr_lambda=lambda epoch: every_step_unit**epoch,
             )
         elif scheduler_type == 'multistep':
             scheduler = optim.lr_scheduler.MultiStepLR(
@@ -362,7 +362,7 @@ class Runner(object):
             #     [http://katsura-jp.hatenablog.com/entry/2019/01/30/183501]
             # if you want to use cosine annealing, use below scheduler.
             scheduler = optim.lr_scheduler.CosineAnnealingLR(
-                optimizer, T_max=max_epoch, eta_min=0.00001
+                optimizer, T_max=max_epoch, eta_min=cosine_eta_min
             )
         else:
             raise Exception(f'invalid scheduler_type: {scheduler_type}')

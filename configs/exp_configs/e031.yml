@@ -29,6 +29,7 @@ optimizer:
     lr: 0.00005
 scheduler:
     scheduler_type: every_step
+    every_step_unit: 0.2
 train:
     max_epoch: 5
     warmup_epoch: 0
