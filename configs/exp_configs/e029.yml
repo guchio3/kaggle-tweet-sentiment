@@ -1,0 +1,44 @@
+description: "e029 kernel tokenizer"
+runner: r002
+SINGLE_FOLD: false
+split:
+    split_type: skf
+    split_num: 5
+    shuffle: true
+    random_state: 71
+loader:
+    trn_sampler_type: random
+    trn_batch_size: 96
+    tst_sampler_type: sequential
+    tst_batch_size: 96
+    dataset_type: tse_headtail_dataset_v2
+dataset:
+    tokenizer_type: roberta_bytelevel_bpe
+    pretrained_model_name_or_path: ./inputs/datasets/
+    do_lower_case: true
+    add_pair_prefix_space: false
+    max_length: 125
+model:
+    model_type: roberta-headtail
+    pretrained_model_name_or_path: roberta-base
+    num_output_units: 125
+fobj:
+    fobj_type: ce
+optimizer:
+    optim_type: adam
+    lr: 0.00003
+scheduler:
+    scheduler_type: cosine
+train:
+    max_epoch: 5
+    warmup_epoch: 0
+    thresh_unit: 0.05  # no meaning for head tail
+    rm_neutral: false
+    ema_mu: 0.5
+    ema_level: batch
+    ema_n: 1  # < 1 means no ema
+predict:
+    neutral_origin: true
+    head_tail_equal_handle: tail
+invalid_labels:
+    # - ./inputs/nes_info/invalid_labels.csv
