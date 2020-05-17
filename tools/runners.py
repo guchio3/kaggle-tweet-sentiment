@@ -340,7 +340,8 @@ class Runner(object):
         return optimizer
 
     def _get_scheduler(self, scheduler_type, max_epoch,
-                       optimizer, every_step_unit, cosine_eta_min):
+                       optimizer, every_step_unit, cosine_eta_min, 
+                       multistep_milestones, multistep_gamma):
         if scheduler_type == 'pass':
             scheduler = pass_scheduler()
         elif scheduler_type == 'every_step':
@@ -351,11 +352,8 @@ class Runner(object):
         elif scheduler_type == 'multistep':
             scheduler = optim.lr_scheduler.MultiStepLR(
                 optimizer,
-                milestones=[
-                    int(max_epoch * 0.8),
-                    int(max_epoch * 0.9)
-                ],
-                gamma=0.1
+                milestones=multistep_milestones,
+                gamma=multistep_gamma
             )
         elif scheduler_type == 'cosine':
             # scheduler examples:
