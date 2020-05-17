@@ -48,6 +48,10 @@ class Runner(object):
         self.logger.info(f'config: {config}')
 
         # unpack config info
+        if 'description' in config:
+            self.description = config['description']
+        else:
+            self.description = 'no description'
         # uppercase means raaaw value
         self.cfg_SINGLE_FOLD = config['SINGLE_FOLD']
         # self.cfg_batch_size = config['batch_size']
@@ -218,7 +222,8 @@ class Runner(object):
                 os.remove(left_file)
 
             fold_time = int(time.time() - epoch_start_time) // 60
-            line_message = f'{self.exp_id}: fini fold {fold_num} in {fold_time} min. \n' \
+            line_message = f'{self.exp_id}: {self.description} \n' \
+                f'fini fold {fold_num} in {fold_time} min. \n' \
                 f'epoch best jaccard: {epoch_best_jaccard}'
             self.logger.send_line_notification(line_message)
 
@@ -234,7 +239,7 @@ class Runner(object):
         trn_time = int(time.time() - trn_start_time) // 60
         line_message = \
             f'----------------------- \n' \
-            f'{self.exp_id}: fini all trn. \n' \
+            f'{self.exp_id}: {self.description} \n' \
             f'jaccard      : {jac_mean:.5f}+-{jac_std:.5f} \n' \
             f'best_jacs    : {fold_best_jacs} \n' \
             f'time         : {trn_time} min \n' \
