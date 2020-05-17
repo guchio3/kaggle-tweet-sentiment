@@ -29,7 +29,7 @@ if __name__ == '__main__':
     debug = args.debug
     with open(f'{CONFIG_DIR}/{exp_id}.yml', 'r') as fin:
         config = yaml.load(fin, Loader=yaml.SafeLoader)
-    with open('{CONFIG_DIR}/e000.yml', 'r') as fin:
+    with open(f'{CONFIG_DIR}/e000.yml', 'r') as fin:
         default_config = yaml.load(fin)
 
     if config['runner'] == 'r001':

@@ -85,7 +85,7 @@ class Runner(object):
     def _fill_config_by_default_config(self, config, default_config):
         for (d_key, d_value) in default_config.items():
             if d_key not in config:
-                message = f' ----- fill {d_key} by dafault values! ----- '
+                message = f' --- fill {d_key} by dafault values, {d_value} ! --- '
                 self.logger.warning(message)
                 config[d_key] = d_value
             elif isinstance(d_value, dict):
