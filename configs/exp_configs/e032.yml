@@ -1,4 +1,4 @@
-description: "warmup multistep 6 epochs ema 0.1"
+description: "no warmup multistep 6 epochs ema 0.1"
 runner: r002
 SINGLE_FOLD: false
 split:
@@ -26,7 +26,7 @@ fobj:
     fobj_type: ce
 optimizer:
     optim_type: adam
-    lr: 0.0001
+    lr: 0.00005
 scheduler:
     scheduler_type: multistep
     multistep_milestones:
@@ -34,8 +34,8 @@ scheduler:
         - 3
     multistep_gamma: 0.1
 train:
-    max_epoch: 6
-    warmup_epoch: 1
+    max_epoch: 5
+    warmup_epoch: 0
     thresh_unit: 0.05  # no meaning for head tail
     rm_neutral: false
     ema_mu: 0.1

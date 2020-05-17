@@ -33,7 +33,8 @@ torch.manual_seed(71)
 
 
 class Runner(object):
-    def __init__(self, exp_id, checkpoint, device, debug, config):
+    def __init__(self, exp_id, checkpoint, device,
+                 debug, config, default_config):
         # set logger
         self.exp_time = datetime\
             .datetime.now()\
@@ -47,8 +48,6 @@ class Runner(object):
         self.logger = myLogger(f'./logs/{self.exp_id}.log')
 
         # set default configs
-        with open('./configs/exp_configs/e000.yml', 'r') as fin:
-            default_config = yaml.load(fin)
         self._fill_config_by_default_config(config, default_config)
 
         self.logger.info(f'exp_id: {exp_id}')
@@ -340,7 +339,7 @@ class Runner(object):
         return optimizer
 
     def _get_scheduler(self, scheduler_type, max_epoch,
-                       optimizer, every_step_unit, cosine_eta_min, 
+                       optimizer, every_step_unit, cosine_eta_min,
                        multistep_milestones, multistep_gamma):
         if scheduler_type == 'pass':
             scheduler = pass_scheduler()
