@@ -18,3 +18,5 @@
          - ``
      1. write kernel
      1. submit
+ 1. configs
+     - configs keep their backward compatibilities using default config (e000.yml). if you add additional configs, plz add the default values to e000.yml.

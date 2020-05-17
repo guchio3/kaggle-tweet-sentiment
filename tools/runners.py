@@ -1,3 +1,4 @@
+import copy
 import datetime
 import itertools
 import os
@@ -8,6 +9,7 @@ from itertools import chain
 
 import numpy as np
 import pandas as pd
+import yaml
 from tqdm import tqdm
 
 import torch
@@ -16,7 +18,7 @@ from tools.datasets import (TSEHeadTailDataset, TSEHeadTailDatasetV2,
                             TSESegmentationDataset)
 from tools.loggers import myLogger
 from tools.metrics import jaccard
-from tools.models import (BertModelWBinaryMultiLabelClassifierHead,
+from tools.models import (EMA, BertModelWBinaryMultiLabelClassifierHead,
                           BertModelWDualMultiClassClassifierHead,
                           RobertaModelWDualMultiClassClassifierHead,
                           RobertaModelWDualMultiClassClassifierHeadV2)
@@ -36,12 +38,19 @@ class Runner(object):
         self.exp_time = datetime\
             .datetime.now()\
             .strftime('%Y-%m-%d-%H-%M-%S')
+
         self.exp_id = exp_id
         self.checkpoint = checkpoint
         self.device = device
         self.debug = debug
         # self.logger = myLogger(f'./logs/{self.exp_id}_{self.exp_time}.log')
         self.logger = myLogger(f'./logs/{self.exp_id}.log')
+
+        # set default configs
+        with open('./configs/exp_configs/e000.yml', 'r') as fin:
+            default_config = yaml.load(fin)
+        self._fill_config_by_default_config(config, default_config)
+
         self.logger.info(f'exp_id: {exp_id}')
         self.logger.info(f'checkpoint: {checkpoint}')
         self.logger.info(f'debug: {debug}')
@@ -73,6 +82,15 @@ class Runner(object):
             'valid_loss': [],
             'valid_acc': [],
         }
+
+    def _fill_config_by_default_config(self, config, default_config):
+        for (d_key, d_value) in default_config.items():
+            if d_key not in config:
+                message = f' ----- fill {d_key} by dafault values! ----- '
+                self.logger.warning(message)
+                config[d_key] = d_value
+            elif isinstance(d_value, dict):
+                self._fill_config_by_default_config(config[d_key], d_value)
 
     def train(self):
         trn_start_time = time.time()
@@ -177,10 +195,21 @@ class Runner(object):
 
                 self._warmup(current_epoch, self.cfg_train['warmup_epoch'],
                              model)
-                trn_loss = self._train_loop(model, optimizer, fobj, trn_loader)
+                ema_model = copy.deepcopy(model)
+                ema_model.eval()
+                ema = EMA(model=ema_model,
+                          mu=self.cfg_train['ema_mu'],
+                          level=self.cfg_train['ema_level'],
+                          n=self.cfg_train['ema_n'])
+
+                trn_loss = self._train_loop(
+                    model, optimizer, fobj, trn_loader, ema)
+                ema.on_epoch_end(model)
+                ema.set_weights(ema_model)  # NOTE: model?
                 val_loss, best_thresh, best_jaccard, val_textIDs, \
                     val_input_ids, val_preds, val_labels = \
-                    self._valid_loop(model, fobj, val_loader)
+                    self._valid_loop(ema_model, fobj, val_loader)
+                #    self._valid_loop(model, fobj, val_loader)
                 epoch_best_jaccard = max(epoch_best_jaccard, best_jaccard)
 
                 self.logger.info(
@@ -199,14 +228,16 @@ class Runner(object):
                 scheduler.step()
 
                 # send to cpu
-                model = model.to('cpu')
+                ema_model = ema_model.to('cpu')
+                # model = model.to('cpu')
                 for state in optimizer.state.values():
                     for k, v in state.items():
                         if isinstance(v, torch.Tensor):
                             state[k] = v.cpu()
 
                 self._save_checkpoint(fold_num, current_epoch,
-                                      model, optimizer, scheduler,
+                                      ema_model, optimizer, scheduler,
+                                      # model, optimizer, scheduler,
                                       val_textIDs, val_input_ids, val_preds,
                                       val_labels, val_loss,
                                       best_thresh, best_jaccard)
@@ -481,7 +512,7 @@ class r001SegmentationRunner(Runner):
     #         f'Best valid acc : {best_acc:.5f}'
     #     self.logger.send_line_notification(line_message)
 
-    def _train_loop(self, model, optimizer, fobj, loader):
+    def _train_loop(self, model, optimizer, fobj, loader, ema):
         model.train()
         running_loss = 0
 
@@ -504,6 +535,8 @@ class r001SegmentationRunner(Runner):
             optimizer.step()
 
             running_loss += train_loss.item()
+
+            ema.on_batch_end(model)
 
         train_loss = running_loss / len(loader)
 
@@ -688,7 +721,7 @@ class r002HeadTailRunner(Runner):
 
         return textIDs, predicted_texts
 
-    def _train_loop(self, model, optimizer, fobj, loader):
+    def _train_loop(self, model, optimizer, fobj, loader, ema):
         model.train()
         running_loss = 0
 
@@ -714,6 +747,8 @@ class r002HeadTailRunner(Runner):
             optimizer.step()
 
             running_loss += train_loss.item()
+
+            ema.on_batch_end(model)
 
         train_loss = running_loss / len(loader)
 
