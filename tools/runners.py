@@ -68,6 +68,7 @@ class Runner(object):
         self.cfg_loader = config['loader']
         self.cfg_dataset = config['dataset']
         self.cfg_fobj = config['fobj']
+        self.cfg_fobj_segmentation = config['fobj_segmentation']
         self.cfg_model = config['model']
         self.cfg_optimizer = config['optimizer']
         self.cfg_scheduler = config['scheduler']
@@ -155,6 +156,7 @@ class Runner(object):
 
             # get fobj
             fobj = self._get_fobj(**self.cfg_fobj)
+            fobj_segmentation = self._get_fobj(**self.cfg_fobj_segmentation)
 
             # build model and related objects
             # these objects have state
@@ -202,7 +204,7 @@ class Runner(object):
                           n=self.cfg_train['ema_n'])
 
                 trn_loss = self._train_loop(
-                    model, optimizer, fobj, trn_loader, ema)
+                    model, optimizer, fobj, trn_loader, ema, fobj_segmentation)
                 ema.on_epoch_end(model)
                 ema.set_weights(ema_model)  # NOTE: model?
                 val_loss, best_thresh, best_jaccard, val_textIDs, \
@@ -281,6 +283,8 @@ class Runner(object):
             fobj = BCEWithLogitsLoss()
         elif fobj_type == 'ce':
             fobj = CrossEntropyLoss()
+        if fobj_type is None:
+            fobj = None
         else:
             raise Exception(f'invalid fobj_type: {fobj_type}')
         return fobj
@@ -719,7 +723,8 @@ class r002HeadTailRunner(Runner):
 
         return textIDs, predicted_texts
 
-    def _train_loop(self, model, optimizer, fobj, loader, ema):
+    def _train_loop(self, model, optimizer, fobj,
+                    loader, ema, fobj_segmentation):
         model.train()
         running_loss = 0
 
@@ -734,10 +739,17 @@ class r002HeadTailRunner(Runner):
                 attention_mask=attention_mask,
             )
 
-            logits_head, logits_tail = logits
+            logits_head = logits[0]
+            logits_tail = logits[1]
 
             train_loss = fobj(logits_head, labels_head)
             train_loss += fobj(logits_tail, labels_tail)
+            if fobj_segmentation:
+                labels_segmentation = batch['labels_segmentation']\
+                    .to(self.device)
+                logits_segmentation = logits[2]
+                train_loss += fobj_segmentation(logits_segmentation,
+                                                labels_segmentation)
 
             optimizer.zero_grad()
             train_loss.backward()
@@ -776,7 +788,8 @@ class r002HeadTailRunner(Runner):
                     input_ids=input_ids,
                     attention_mask=attention_mask,
                 )
-                logits_head, logits_tail = logits
+                logits_head = logits[0]
+                logits_tail = logits[1]
 
                 valid_loss = fobj(logits_head, labels_head)
                 valid_loss += fobj(logits_tail, labels_tail)
@@ -852,7 +865,8 @@ class r002HeadTailRunner(Runner):
 
     def _get_predicted_texts(self, texts, input_ids, sentiments, y_preds_head,
                              y_preds_tail, tokenizer,
-                             neutral_origin=False, head_tail_equal_handle='tail'):
+                             neutral_origin=False,
+                             head_tail_equal_handle='tail'):
         predicted_texts = []
         for text, input_id, sentiment, y_pred_head, y_pred_tail \
                 in zip(texts, input_ids, sentiments, y_preds_head, y_preds_tail):
@@ -910,7 +924,13 @@ class r002HeadTailRunner(Runner):
         softmax = Softmax(dim=1)
 
         with torch.no_grad():
-            textIDs, test_texts, test_input_ids, test_sentiments, test_preds_head, test_preds_tail = [], [], [], [], [], []
+            textIDs = []
+            test_texts = []
+            test_input_ids = []
+            test_sentiments = []
+            test_preds_head = []
+            test_preds_tail = []
+
             for batch in tqdm(loader):
                 textID = batch['textID']
                 test_text = batch['text']
@@ -922,7 +942,8 @@ class r002HeadTailRunner(Runner):
                     input_ids=input_ids,
                     attention_mask=attention_mask,
                 )
-                logits_head, logits_tail = logits
+                logits_head = logits[0]
+                logits_tail = logits[1]
 
                 predicted_head = softmax(logits_head.data)
                 predicted_tail = softmax(logits_tail.data)

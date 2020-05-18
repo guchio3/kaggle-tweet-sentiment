@@ -26,6 +26,8 @@ model:
     num_output_units: 125
 fobj:
     fobj_type: ce
+fobj_segmentation:
+    fobj_type: none
 optimizer:
     optim_type: adam
     lr: 0.00003
