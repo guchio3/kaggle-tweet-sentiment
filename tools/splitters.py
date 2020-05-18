@@ -33,16 +33,16 @@ class mySplitter:
             fold_df = pd.read_csv(self.abhishek5)
             for i in range(5):
                 fold.append((
-                            fold_df.query('kfold == {i}').index.tolist(),
-                            fold_df.query('kfold != {i}').index.tolist(),
+                            fold_df.query(f'kfold != {i}').index.tolist(),
+                            fold_df.query(f'kfold == {i}').index.tolist(),
                             ))
         elif self.split_type == 'abhishek8':
             fold = []
             fold_df = pd.read_csv(self.abhishek8)
             for i in range(8):
                 fold.append((
-                            fold_df.query('kfold == {i}').index.tolist(),
-                            fold_df.query('kfold != {i}').index.tolist(),
+                            fold_df.query(f'kfold != {i}').index.tolist(),
+                            fold_df.query(f'kfold == {i}').index.tolist(),
                             ))
         else:
             raise NotImplementedError(f'split_type: {self.split_type}')
