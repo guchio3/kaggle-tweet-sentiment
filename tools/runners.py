@@ -387,7 +387,7 @@ class Runner(object):
             #     [http://katsura-jp.hatenablog.com/entry/2019/01/30/183501]
             # if you want to use cosine annealing, use below scheduler.
             scheduler = optim.lr_scheduler.CosineAnnealingLR(
-                optimizer, T_max=max_epoch, eta_min=cosine_eta_min
+                optimizer, T_max=max_epoch-1, eta_min=cosine_eta_min
             )
         else:
             raise Exception(f'invalid scheduler_type: {scheduler_type}')
