@@ -34,7 +34,7 @@ optimizer:
 scheduler:
     scheduler_type: cosine
     every_step_unit: 0.2
-    cosine_eta_min: 0.00001
+    cosine_eta_min: 0.000003
     multistep_milestones:
         - 1
         - 3
