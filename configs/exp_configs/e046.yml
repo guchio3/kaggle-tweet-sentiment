@@ -28,7 +28,7 @@ fobj_segmentation:
     fobj_type: nothing
 optimizer:
     optim_type: adam
-    lr: 0.00005
+    lr: 0.00003
 scheduler:
     scheduler_type: every_step
     every_step_unit: 0.35
