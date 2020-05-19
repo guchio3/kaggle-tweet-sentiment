@@ -47,7 +47,7 @@ train:
     ema_mu: 0.9
     ema_level: batch
     ema_n: 0  # < 1 means no ema
-    segmentation_loss_ratios: 1.
+    segmentation_loss_ratios: 1
 predict:
     neutral_origin: true
     head_tail_equal_handle: tail
