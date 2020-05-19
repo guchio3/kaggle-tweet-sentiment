@@ -163,11 +163,13 @@ class TSEHeadTailDataset(TSEDataset):
     def __getitem__(self, idx):
         row = self.df.loc[idx]
 
-        if row['input_ids'] is None:
-            row = self._prep_text(row)
-            self.df.loc[idx, 'input_ids'] = row['input_ids']
-            self.df.loc[idx, 'labels'] = row['labels']
-            self.df.loc[idx, 'attention_mask'] = row['attention_mask']
+        # if row['input_ids'] is None:
+        row = self._prep_text(row)
+        #     # for key in row.to_dict().keys():
+        #     #     self.df.loc[idx, key] = row[key]
+        #     # self.df.loc[idx, 'input_ids'] = row['input_ids']
+        #     # self.df.loc[idx, 'labels'] = row['labels']
+        #     # self.df.loc[idx, 'attention_mask'] = row['attention_mask']
 
         return {
             'textID': row['textID'],
@@ -218,7 +220,7 @@ class TSEHeadTailDataset(TSEDataset):
         input_ids = text_output['input_ids']
         sel_input_ids = selected_text_output['input_ids']
         # 1 start なのは、先頭の token をスルーするため
-        matched_cnt = len([i for i in input_ids[1:1+len(sel_input_ids)]
+        matched_cnt = len([i for i in input_ids[1:1 + len(sel_input_ids)]
                            if i in sel_input_ids])
         best_matched_cnt = matched_cnt
         best_matched_i = 1
@@ -345,4 +347,39 @@ class TSEHeadTailDatasetV2(TSEDataset):
             row['labels_head'] = 1
             row['labels_tail'] = 1 + len(enc.ids)  # == len(offsets)
 
+        return row
+
+
+class TSEHeadTailSegmentationDataset(TSEHeadTailDataset):
+
+    def __getitem__(self, idx):
+        row = self.df.loc[idx]
+
+        row = self._prep_text(row)
+
+        return {
+            'textID': row['textID'],
+            'text': row['text'],
+            'input_ids': torch.tensor(row['input_ids']),
+            'sentiment': row['sentiment'],
+            'attention_mask': torch.tensor(row['attention_mask']),
+            'selected_text': row['selected_text'],
+            'labels_head': torch.tensor(row['labels_head']),
+            'labels_tail': torch.tensor(row['labels_tail']),
+            'labels_segmentation': torch.tensor(row['labels_segmentation']),
+        }
+
+    def _prep_text(self, row):
+        row = super()._prep_text(row)
+        labels_segmentation = np.zeros(self.max_length)
+        if row['labels_head'] >= 0 and row['labels_tail'] >= 0:
+            labels_segmentation[row['labels_head']:row['labels_tail']] = 1
+        row['labels_segmentation'] = labels_segmentation
+        pad_token = self.tokenizer.encode_plus(
+            self.tokenizer.special_tokens_map['pad_token'],
+            text_pair=None,
+            add_special_tokens=False,
+            max_length=1)['input_ids'][0]
+        row['labels_segmentation'][np.asarray(
+            row['input_ids']) != pad_token] = -1
         return row

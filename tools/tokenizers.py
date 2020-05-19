@@ -48,6 +48,10 @@ class myBertByteLevelBPETokenizer(ByteLevelBPETokenizer):
 
 
 class myRobertaByteLevelBPETokenizer(ByteLevelBPETokenizer):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.special_tokens_map = {'pad_token': '<pad>'}
+
     def __len__(self, ):
         return self.get_vocab_size()
 

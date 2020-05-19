@@ -9,19 +9,22 @@ from itertools import chain
 
 import numpy as np
 import pandas as pd
-import yaml
 from tqdm import tqdm
 
 import torch
 import torch.optim as optim
 from tools.datasets import (TSEHeadTailDataset, TSEHeadTailDatasetV2,
+                            TSEHeadTailSegmentationDataset,
                             TSESegmentationDataset)
 from tools.loggers import myLogger
+from tools.losses import lovasz_hinge
 from tools.metrics import jaccard
-from tools.models import (EMA, BertModelWBinaryMultiLabelClassifierHead,
-                          BertModelWDualMultiClassClassifierHead,
-                          RobertaModelWDualMultiClassClassifierHead,
-                          RobertaModelWDualMultiClassClassifierHeadV2)
+from tools.models import (
+    EMA, BertModelWBinaryMultiLabelClassifierHead,
+    BertModelWDualMultiClassClassifierHead,
+    RobertaModelWDualMultiClassClassifierAndSegmentationHead,
+    RobertaModelWDualMultiClassClassifierHead,
+    RobertaModelWDualMultiClassClassifierHeadV2)
 from tools.schedulers import pass_scheduler
 from tools.splitters import mySplitter
 from torch.nn import BCEWithLogitsLoss, CrossEntropyLoss, Sigmoid, Softmax
@@ -157,6 +160,17 @@ class Runner(object):
             # get fobj
             fobj = self._get_fobj(**self.cfg_fobj)
             fobj_segmentation = self._get_fobj(**self.cfg_fobj_segmentation)
+            if 'segmentation_loss_ratios' in self.cfg_train:
+                if isinstance(self.cfg_train['segmentation_loss_ratios'], int):
+                    segmentation_loss_ratios = [self.cfg_train['segmentation_loss_ratios']] \
+                        * self.cfg_train['max_epoch']
+                elif isinstance(self.cfg_train['segmentation_loss_ratios'], list):
+                    segmentation_loss_ratios = self.cfg_train['segmentation_loss_ratios']
+                else:
+                    raise NotImplementedError('segmentation_loss_ratios')
+            else:
+                self.logger.warning('use default segmentation_loss_ratios')
+                segmentation_loss_ratios = [1] * self.cfg_train['max_epoch']
 
             # build model and related objects
             # these objects have state
@@ -203,8 +217,11 @@ class Runner(object):
                           level=self.cfg_train['ema_level'],
                           n=self.cfg_train['ema_n'])
 
+                segmentation_loss_ratio = segmentation_loss_ratios[current_epoch]
+
                 trn_loss = self._train_loop(
-                    model, optimizer, fobj, trn_loader, ema, fobj_segmentation)
+                    model, optimizer, fobj, trn_loader, ema,
+                    fobj_segmentation, segmentation_loss_ratio)
                 ema.on_epoch_end(model)
                 ema.set_weights(ema_model)  # NOTE: model?
                 val_loss, best_thresh, best_jaccard, val_textIDs, \
@@ -283,7 +300,9 @@ class Runner(object):
             fobj = BCEWithLogitsLoss()
         elif fobj_type == 'ce':
             fobj = CrossEntropyLoss()
-        if fobj_type is None:
+        elif fobj_type == 'lovasz':
+            fobj = lovasz_hinge
+        elif fobj_type == 'nothing':
             fobj = None
         else:
             raise Exception(f'invalid fobj_type: {fobj_type}')
@@ -308,6 +327,11 @@ class Runner(object):
             )
         elif model_type == 'roberta-headtail-v2':
             model = RobertaModelWDualMultiClassClassifierHeadV2(
+                num_output_units,
+                pretrained_model_name_or_path
+            )
+        elif model_type == 'roberta-headtail-segmentation':
+            model = RobertaModelWDualMultiClassClassifierAndSegmentationHead(
                 num_output_units,
                 pretrained_model_name_or_path
             )
@@ -386,14 +410,24 @@ class Runner(object):
             raise NotImplementedError('mode {mode} is not valid for loader')
 
         if dataset_type == 'tse_segmentation_dataset':
-            dataset = TSESegmentationDataset(mode=mode, df=df, logger=self.logger,
-                                             debug=self.debug, **self.cfg_dataset)
+            dataset = TSESegmentationDataset(mode=mode, df=df,
+                                             logger=self.logger,
+                                             debug=self.debug,
+                                             **self.cfg_dataset)
         elif dataset_type == 'tse_headtail_dataset':
             dataset = TSEHeadTailDataset(mode=mode, df=df, logger=self.logger,
                                          debug=self.debug, **self.cfg_dataset)
         elif dataset_type == 'tse_headtail_dataset_v2':
-            dataset = TSEHeadTailDatasetV2(mode=mode, df=df, logger=self.logger,
-                                           debug=self.debug, **self.cfg_dataset)
+            dataset = TSEHeadTailDatasetV2(mode=mode, df=df,
+                                           logger=self.logger,
+                                           debug=self.debug,
+                                           **self.cfg_dataset)
+        elif dataset_type == 'tse_headtail_segmentation_dataset':
+            dataset = TSEHeadTailSegmentationDataset(mode=mode, df=df,
+                                                     logger=self.logger,
+                                                     debug=self.debug,
+                                                     **self.cfg_dataset)
+
         else:
             raise NotImplementedError()
 
@@ -724,7 +758,7 @@ class r002HeadTailRunner(Runner):
         return textIDs, predicted_texts
 
     def _train_loop(self, model, optimizer, fobj,
-                    loader, ema, fobj_segmentation):
+                    loader, ema, fobj_segmentation, segmentation_loss_ratio):
         model.train()
         running_loss = 0
 
@@ -748,8 +782,12 @@ class r002HeadTailRunner(Runner):
                 labels_segmentation = batch['labels_segmentation']\
                     .to(self.device)
                 logits_segmentation = logits[2]
-                train_loss += fobj_segmentation(logits_segmentation,
-                                                labels_segmentation)
+                # logits_segmentation *= attention_mask
+
+                train_loss += segmentation_loss_ratio * \
+                    fobj_segmentation(logits_segmentation,
+                                      labels_segmentation,
+                                      ignore=-1)
 
             optimizer.zero_grad()
             train_loss.backward()
