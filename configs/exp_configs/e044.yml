@@ -28,9 +28,9 @@ fobj_segmentation:
     fobj_type: lovasz
 optimizer:
     optim_type: adam
-    lr: 0.00005
+    lr: 0.00003
 scheduler:
-    scheduler_type: every_step
+    scheduler_type: cosine
     every_step_unit: 0.4
 train:
     max_epoch: 5
@@ -40,7 +40,7 @@ train:
     ema_mu: 0.5
     ema_level: batch
     ema_n: 1  # < 1 means no ema
-    segmentation_loss_ratios:
+    segmentation_loss_ratios: 1
         - 1.
         - 0.
         - 1.

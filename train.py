@@ -30,7 +30,7 @@ if __name__ == '__main__':
     with open(f'{CONFIG_DIR}/{exp_id}.yml', 'r') as fin:
         config = yaml.load(fin, Loader=yaml.SafeLoader)
     with open(f'{CONFIG_DIR}/e000.yml', 'r') as fin:
-        default_config = yaml.load(fin)
+        default_config = yaml.load(fin, Loader=yaml.SafeLoader)
 
     if config['runner'] == 'r001':
         from tools.runners import r001SegmentationRunner as Runner
