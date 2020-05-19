@@ -169,8 +169,8 @@ class RobertaModelWDualMultiClassClassifierHead(nn.Module):
             self.model.pooler.dense.out_features, 1, 1)
         self.classifier_conv_tail = nn.Conv1d(
             self.model.pooler.dense.out_features, 1, 1)
-        # self.add_module('conv_output_head', self.classifier_conv_head)
-        # self.add_module('conv_output_tail', self.classifier_conv_tail)
+        self.add_module('conv_output_head', self.classifier_conv_head)
+        self.add_module('conv_output_tail', self.classifier_conv_tail)
 
         # self.classifier_head = nn.Linear(
         #     self.model.pooler.dense.out_features, num_labels)
@@ -244,6 +244,9 @@ class RobertaModelWDualMultiClassClassifierAndSegmentationHead(
         super().__init__(num_labels, pretrained_model_name_or_path)
         self.classifier_conv_segmentation = nn.Conv1d(
             self.model.pooler.dense.out_features, 1, 1)
+        self.add_module(
+            'conv_output_segmentation',
+            self.classifier_conv_segmentation)
 
     def forward(self, input_ids=None, attention_mask=None,
                 token_type_ids=None, position_ids=None, head_mask=None,
