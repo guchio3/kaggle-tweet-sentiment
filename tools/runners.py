@@ -210,6 +210,14 @@ class Runner(object):
 
                 self._warmup(current_epoch, self.cfg_train['warmup_epoch'],
                              model)
+
+                if isinstance(self.cfg_train['accum_mod'], int):
+                    accum_mod = self.cfg_train['accum_mod']
+                elif isinstance(self.cfg_train['accum_mod'], list):
+                    accum_mod = self.cfg_train['accum_mod'][current_epoch]
+                else:
+                    raise NotImplementedError('accum_mod')
+
                 ema_model = copy.deepcopy(model)
                 ema_model.eval()
                 ema = EMA(model=ema_model,
@@ -220,7 +228,8 @@ class Runner(object):
                 segmentation_loss_ratio = segmentation_loss_ratios[current_epoch]
 
                 trn_loss = self._train_loop(
-                    model, optimizer, fobj, trn_loader, ema,
+                    model, optimizer, fobj, trn_loader,
+                    ema, accum_mod,
                     fobj_segmentation, segmentation_loss_ratio)
                 ema.on_epoch_end(model)
                 ema.set_weights(ema_model)  # NOTE: model?
@@ -237,6 +246,7 @@ class Runner(object):
                     + f'best val thresh: {best_thresh:.5f} / '
                     + f'best val jaccard: {best_jaccard:.5f} / '
                     + f'lr: {optimizer.param_groups[0]["lr"]:.6f} / '
+                    + f'accum_mod: {accum_mod} / '
                     + f'time: {int(time.time()-start_time)}sec')
 
                 self.histories[fold_num]['trn_loss'].append(trn_loss)
@@ -387,7 +397,7 @@ class Runner(object):
             #     [http://katsura-jp.hatenablog.com/entry/2019/01/30/183501]
             # if you want to use cosine annealing, use below scheduler.
             scheduler = optim.lr_scheduler.CosineAnnealingLR(
-                optimizer, T_max=max_epoch-1, eta_min=cosine_eta_min
+                optimizer, T_max=max_epoch - 1, eta_min=cosine_eta_min
             )
         else:
             raise Exception(f'invalid scheduler_type: {scheduler_type}')
@@ -758,11 +768,12 @@ class r002HeadTailRunner(Runner):
         return textIDs, predicted_texts
 
     def _train_loop(self, model, optimizer, fobj,
-                    loader, ema, fobj_segmentation, segmentation_loss_ratio):
+                    loader, ema, accum_mod,
+                    fobj_segmentation, segmentation_loss_ratio):
         model.train()
         running_loss = 0
 
-        for batch in tqdm(loader):
+        for batch_i, batch in enumerate(tqdm(loader)):
             input_ids = batch['input_ids'].to(self.device)
             labels_head = batch['labels_head'].to(self.device)
             labels_tail = batch['labels_tail'].to(self.device)
@@ -789,14 +800,15 @@ class r002HeadTailRunner(Runner):
                                       labels_segmentation,
                                       ignore=-1)
 
-            optimizer.zero_grad()
             train_loss.backward()
-
-            optimizer.step()
 
             running_loss += train_loss.item()
 
-            ema.on_batch_end(model)
+            if (batch_i + 1) % accum_mod == 0:
+                optimizer.step()
+                optimizer.zero_grad()
+
+                ema.on_batch_end(model)
 
         train_loss = running_loss / len(loader)
 
