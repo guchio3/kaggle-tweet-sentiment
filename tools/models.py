@@ -392,7 +392,6 @@ class RobertaModelWDualMultiClassClassifierHeadV3(nn.Module):
                              inputs_embeds=inputs_embeds,
                              encoder_hidden_states=encoder_hidden_states,
                              encoder_attention_mask=encoder_attention_mask)
-
         output = outputs[2]
         output = torch.cat((output[-1], output[-2]), dim=-1)
         output = self.dropout(output)
@@ -414,6 +413,93 @@ class RobertaModelWDualMultiClassClassifierHeadV3(nn.Module):
 
         logits_head = logits_head.squeeze(-1)
         logits_tail = logits_tail.squeeze(-1)
+
+        # add hidden states and attention if they are here
+        outputs = ((logits_head, logits_tail),)
+
+        return outputs  # logits, (hidden_states), (attentions)
+
+    def resize_token_embeddings(self, token_num):
+        self.model.resize_token_embeddings(token_num)
+
+
+class RobertaModelWDualMultiClassClassifierHeadV4(nn.Module):
+    def __init__(self, num_labels, pretrained_model_name_or_path):
+        super().__init__()
+        if pretrained_model_name_or_path:
+            if isinstance(pretrained_model_name_or_path, str):
+                self.model = RobertaModel.from_pretrained(
+                    pretrained_model_name_or_path,
+                    output_hidden_states=True)
+            else:
+                # for sub
+                self.model = RobertaModel(
+                    pretrained_model_name_or_path,
+                    output_hidden_states=True)
+        else:
+            raise NotImplementedError
+        self.num_labels = num_labels
+        self.dropout = nn.Dropout(0.2)
+        self.leaky_relu = nn.LeakyReLU()
+        # self.classifier_conv_adp = nn.Conv1d(
+        #     self.model.pooler.dense.out_features, 13, 1)
+        self.classifier_adp_weights = nn.Parameter(torch.randn(13))
+        self.classifier_adp_weights.requires_grad = True
+        self.classifier_conv_head = nn.Conv1d(
+            self.model.pooler.dense.out_features, 1, 1)
+        self.classifier_conv_tail = nn.Conv1d(
+            self.model.pooler.dense.out_features, 1, 1)
+        # self.add_module('conv_output_adp', self.classifier_conv_adp)
+        self.add_module('conv_output_head', self.classifier_conv_head)
+        self.add_module('conv_output_tail', self.classifier_conv_tail)
+
+    def forward(self, input_ids=None, attention_mask=None,
+                token_type_ids=None, position_ids=None, head_mask=None,
+                inputs_embeds=None, encoder_hidden_states=None,
+                encoder_attention_mask=None, special_tokens_mask=None):
+        outputs = self.model(input_ids,
+                             attention_mask=attention_mask,
+                             token_type_ids=token_type_ids,
+                             position_ids=position_ids,
+                             head_mask=head_mask,
+                             inputs_embeds=inputs_embeds,
+                             encoder_hidden_states=encoder_hidden_states,
+                             encoder_attention_mask=encoder_attention_mask)
+
+        # adp_output = outputs[0]
+        # adp_output = self.dropout(adp_output)
+        # adp_output = torch.transpose(adp_output, 1, 2)
+        # adp_output = self.classifier_conv_adp(adp_output).squeeze()
+        # adp_output = torch.transpose(adp_output, 1, 2)
+        # adp_output = adp_output.mean(dim=1)
+        # adp_output /= adp_output.sum(dim=1).reshape(-1, 1)  # scale 1 sum
+
+        output = outputs[2]
+        w_sum = self.leaky_relu(self.classifier_adp_weights).sum()
+        output = [output[i] * self.leaky_relu(self.classifier_adp_weights[i]) / w_sum
+                  for i in range(13)]
+        temp_output = output[0]
+        for i in range(1, 13):
+            temp_output += output[i]
+        output = temp_output
+
+        output = torch.transpose(output, 1, 2)
+        output = self.dropout(output)
+        logits_head = self.classifier_conv_head(output).squeeze()
+        logits_tail = self.classifier_conv_tail(output).squeeze()
+
+        # special tokes を -inf で mask
+        if special_tokens_mask is not None:
+            inf = torch.tensor(float('inf')).to(logits_head.device)
+            logits_head = logits_head.where(special_tokens_mask == 0, -inf)
+            # we use [head:tail] type indexing,
+            # so tail mask should be shifted
+            tail_special_tokens_mask = torch.cat(
+                [special_tokens_mask[:, -1:],
+                 special_tokens_mask[:, :-1]],
+                dim=1)
+            logits_tail = logits_tail.where(
+                tail_special_tokens_mask == 0, -inf)
 
         # add hidden states and attention if they are here
         outputs = ((logits_head, logits_tail),)

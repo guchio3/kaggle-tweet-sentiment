@@ -25,7 +25,8 @@ from tools.models import (
     RobertaModelWDualMultiClassClassifierAndSegmentationHead,
     RobertaModelWDualMultiClassClassifierHead,
     RobertaModelWDualMultiClassClassifierHeadV2,
-    RobertaModelWDualMultiClassClassifierHeadV3)
+    RobertaModelWDualMultiClassClassifierHeadV3,
+    RobertaModelWDualMultiClassClassifierHeadV4)
 from tools.schedulers import pass_scheduler
 from tools.splitters import mySplitter
 from torch.nn import BCEWithLogitsLoss, CrossEntropyLoss, Sigmoid, Softmax
@@ -343,6 +344,11 @@ class Runner(object):
             )
         elif model_type == 'roberta-headtail-v3':
             model = RobertaModelWDualMultiClassClassifierHeadV3(
+                num_output_units,
+                pretrained_model_name_or_path
+            )
+        elif model_type == 'roberta-headtail-v4':
+            model = RobertaModelWDualMultiClassClassifierHeadV4(
                 num_output_units,
                 pretrained_model_name_or_path
             )
@@ -794,7 +800,7 @@ class r002HeadTailRunner(Runner):
             (logits, ) = model(
                 input_ids=input_ids,
                 attention_mask=attention_mask,
-                special_tokens_mask=special_tokens_mask,
+                # special_tokens_mask=special_tokens_mask,
             )
 
             logits_head = logits[0]
@@ -809,7 +815,7 @@ class r002HeadTailRunner(Runner):
             if temp_loss == float('inf'):
                 self.logger.warning(f'tail loss is nan for {batch_i}')
                 for i in range(len(input_ids)):
-                    print(special_tokens_mask[i][labels_tail[i]+1])
+                    print(special_tokens_mask[i][labels_tail[i]-1])
             else:
                 train_loss += temp_loss
             if train_loss == float('inf'):
@@ -866,7 +872,7 @@ class r002HeadTailRunner(Runner):
                 (logits, ) = model(
                     input_ids=input_ids,
                     attention_mask=attention_mask,
-                    special_tokens_mask=special_tokens_mask,
+                    # special_tokens_mask=special_tokens_mask,
                 )
                 logits_head = logits[0]
                 logits_tail = logits[1]
