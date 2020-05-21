@@ -572,13 +572,10 @@ class r001SegmentationRunner(Runner):
                 input_ids=input_ids,
                 labels=labels,
                 attention_mask=attention_mask,
-                special_tokens_mask=special_tokens_mask,
+                # special_tokens_mask=special_tokens_mask,
             )
 
             train_loss = fobj(logits, labels)
-            if train_loss == float('inf'):
-                from pudb import set_trace
-                set_trace()
 
             optimizer.zero_grad()
             train_loss.backward()
@@ -791,7 +788,7 @@ class r002HeadTailRunner(Runner):
             (logits, ) = model(
                 input_ids=input_ids,
                 attention_mask=attention_mask,
-                # special_tokens_mask=special_tokens_mask,
+                special_tokens_mask=special_tokens_mask,
             )
 
             logits_head = logits[0]
@@ -799,6 +796,10 @@ class r002HeadTailRunner(Runner):
 
             train_loss = fobj(logits_head, labels_head)
             train_loss += fobj(logits_tail, labels_tail)
+            if train_loss == float('inf'):
+                from pudb import set_trace
+                set_trace()
+
             if fobj_segmentation:
                 labels_segmentation = batch['labels_segmentation']\
                     .to(self.device)
