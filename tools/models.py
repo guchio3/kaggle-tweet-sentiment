@@ -396,7 +396,14 @@ class RobertaModelWDualMultiClassClassifierHeadV3(nn.Module):
         if special_tokens_mask is not None:
             inf = torch.tensor(float('inf')).to(logits_head.device)
             logits_head = logits_head.where(special_tokens_mask == 0, -inf)
-            logits_tail = logits_tail.where(special_tokens_mask == 0, -inf)
+            # we use [head:tail] type indexing,
+            # so tail mask should be shifted
+            tail_special_tokens_mask = torch.cat(
+                [special_tokens_mask[:, -1:],
+                 special_tokens_mask[:, :-1]],
+                dim=1)
+            logits_tail = logits_tail.where(
+                tail_special_tokens_mask == 0, -inf)
 
         logits_head = logits_head.squeeze(-1)
         logits_tail = logits_tail.squeeze(-1)
