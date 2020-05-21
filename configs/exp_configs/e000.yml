@@ -48,9 +48,11 @@ train:
     ema_level: batch
     ema_n: 0  # < 1 means no ema
     accum_mod: 1
+    use_special_mask: false
     segmentation_loss_ratios: 1
 predict:
     neutral_origin: true
     head_tail_equal_handle: tail
+    use_special_mask: false
 invalid_labels:
     # - ./inputs/nes_info/invalid_labels.csv

@@ -252,11 +252,13 @@ class TSEHeadTailDataset(TSEDataset):
             self.logger.debug(input_ids)
             self.logger.debug(sel_input_ids)
             self.logger.debug(selected_text_output['input_ids'])
-            # self.logger.warning(f'textID: {row["textID"]} -- no matching.')
             # self.logger.debug(f'textID: {row["textID"]} -- no matching.')
 
         row['labels_head'] = best_matched_i
-        row['labels_tail'] = best_matched_i + len(sel_input_ids)
+        # row['labels_tail'] = best_matched_i + len(sel_input_ids)
+        # 時々ラベルミスで sel_input_ids の方が長くなる
+        i_length = min(len(sel_input_ids), row['special_tokens_mask'].sum())
+        row['labels_tail'] = best_matched_i + i_length
         return row
 
 
@@ -281,7 +283,7 @@ class TSEHeadTailDatasetV2(TSEDataset):
             'input_ids': torch.tensor(row['input_ids']).long(),
             'sentiment': row['sentiment'],
             'attention_mask': torch.tensor(row['attention_mask']).long(),
-            'special_tokens_mask': torch.tensor(row['special_tokens_mask']).long(),
+            # 'special_tokens_mask': torch.tensor(row['special_tokens_mask']).long(),
             'selected_text': row['selected_text'],
             'labels_head': torch.tensor(row['labels_head']),
             'labels_tail': torch.tensor(row['labels_tail']),
