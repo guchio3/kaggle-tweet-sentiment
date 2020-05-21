@@ -802,12 +802,12 @@ class r002HeadTailRunner(Runner):
 
             temp_loss = fobj(logits_head, labels_head)
             if temp_loss == float('inf'):
-                self.logger.warning(f'loss is nan for {batch_i}')
+                self.logger.warning(f'head loss is nan for {batch_i}')
             else:
                 train_loss = temp_loss
             temp_loss = fobj(logits_tail, labels_tail)
             if temp_loss == float('inf'):
-                self.logger.warning(f'loss is nan for {batch_i}')
+                self.logger.warning(f'tail loss is nan for {batch_i}')
             else:
                 train_loss += temp_loss
             if train_loss == float('inf'):
