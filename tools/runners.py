@@ -24,7 +24,8 @@ from tools.models import (
     BertModelWDualMultiClassClassifierHead,
     RobertaModelWDualMultiClassClassifierAndSegmentationHead,
     RobertaModelWDualMultiClassClassifierHead,
-    RobertaModelWDualMultiClassClassifierHeadV2)
+    RobertaModelWDualMultiClassClassifierHeadV2,
+    RobertaModelWDualMultiClassClassifierHeadV3)
 from tools.schedulers import pass_scheduler
 from tools.splitters import mySplitter
 from torch.nn import BCEWithLogitsLoss, CrossEntropyLoss, Sigmoid, Softmax
@@ -340,6 +341,11 @@ class Runner(object):
                 num_output_units,
                 pretrained_model_name_or_path
             )
+        elif model_type == 'roberta-headtail-v3':
+            model = RobertaModelWDualMultiClassClassifierHeadV3(
+                num_output_units,
+                pretrained_model_name_or_path
+            )
         elif model_type == 'roberta-headtail-segmentation':
             model = RobertaModelWDualMultiClassClassifierAndSegmentationHead(
                 num_output_units,
@@ -572,7 +578,7 @@ class r001SegmentationRunner(Runner):
                 input_ids=input_ids,
                 labels=labels,
                 attention_mask=attention_mask,
-                # special_tokens_mask=special_tokens_mask,
+                special_tokens_mask=special_tokens_mask,
             )
 
             train_loss = fobj(logits, labels)
@@ -610,7 +616,7 @@ class r001SegmentationRunner(Runner):
                 (logits, ) = model(
                     input_ids=input_ids,
                     attention_mask=attention_mask,
-                    # special_tokens_mask=special_tokens_mask,
+                    special_tokens_mask=special_tokens_mask,
                 )
 
                 valid_loss = fobj(logits, labels)
@@ -850,7 +856,7 @@ class r002HeadTailRunner(Runner):
                 (logits, ) = model(
                     input_ids=input_ids,
                     attention_mask=attention_mask,
-                    # special_tokens_mask=special_tokens_mask,
+                    special_tokens_mask=special_tokens_mask,
                 )
                 logits_head = logits[0]
                 logits_tail = logits[1]
@@ -1007,7 +1013,7 @@ class r002HeadTailRunner(Runner):
                 (logits, ) = model(
                     input_ids=input_ids,
                     attention_mask=attention_mask,
-                    # special_tokens_mask=special_tokens_mask,
+                    special_tokens_mask=special_tokens_mask,
                 )
                 logits_head = logits[0]
                 logits_tail = logits[1]

@@ -392,8 +392,8 @@ class RobertaModelWDualMultiClassClassifierHeadV3(nn.Module):
         # special tokes を -inf で mask
         if special_tokens_mask is not None:
             inf = torch.tensor(float('inf')).to(logits_head.device)
-            logits_head = logits_head.where(special_tokens_mask == 1, -inf)
-            logits_tail = logits_tail.where(special_tokens_mask == 1, -inf)
+            logits_head = logits_head.where(special_tokens_mask == 0, -inf)
+            logits_tail = logits_tail.where(special_tokens_mask == 0, -inf)
 
         # add hidden states and attention if they are here
         outputs = ((logits_head, logits_tail),) + outputs[2:]
