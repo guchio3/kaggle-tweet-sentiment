@@ -802,9 +802,9 @@ class r002HeadTailRunner(Runner):
 
             train_loss = fobj(logits_head, labels_head)
             train_loss += fobj(logits_tail, labels_tail)
-            if train_loss == float('inf'):
-                from pudb import set_trace
-                set_trace()
+            # if train_loss == float('inf'):
+            #     from pudb import set_trace
+            #     set_trace()
 
             if fobj_segmentation:
                 labels_segmentation = batch['labels_segmentation']\
