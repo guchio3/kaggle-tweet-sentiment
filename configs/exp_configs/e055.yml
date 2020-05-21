@@ -1,4 +1,4 @@
-description: "e040 w/ batch accumuration **2"
+description: "e052 model v2"
 runner: r002
 SINGLE_FOLD: false
 split:
@@ -19,7 +19,7 @@ dataset:
     add_pair_prefix_space: false
     max_length: 125
 model:
-    model_type: roberta-headtail
+    model_type: roberta-headtail-v2
     pretrained_model_name_or_path: roberta-base
     num_output_units: 125
 fobj:
@@ -28,8 +28,8 @@ optimizer:
     optim_type: adam
     lr: 0.00005
 scheduler:
-    scheduler_type: pass
-    # every_step_unit: 0.4
+    scheduler_type: every_step
+    every_step_unit: 0.4
 train:
     max_epoch: 5
     warmup_epoch: 0

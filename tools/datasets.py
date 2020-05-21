@@ -177,6 +177,7 @@ class TSEHeadTailDataset(TSEDataset):
             'input_ids': torch.tensor(row['input_ids']),
             'sentiment': row['sentiment'],
             'attention_mask': torch.tensor(row['attention_mask']),
+            'special_tokens_mask': torch.tensor(row['special_tokens_mask']).long(),
             'selected_text': row['selected_text'],
             'labels_head': torch.tensor(row['labels_head']),
             'labels_tail': torch.tensor(row['labels_tail']),
@@ -195,9 +196,11 @@ class TSEHeadTailDataset(TSEDataset):
             return_tensor='pt',
             return_token_type_ids=False,
             return_attention_mask=True,
+            return_special_tokens_mask=True,
         )
         row['input_ids'] = text_output['input_ids']
         row['attention_mask'] = text_output['attention_mask']
+        row['special_tokens_mask'] = text_output['special_tokens_mask']
         if 'selected_text' not in row:
             row['selected_text'] = ''
             row['labels_head'] = -1
@@ -278,6 +281,7 @@ class TSEHeadTailDatasetV2(TSEDataset):
             'input_ids': torch.tensor(row['input_ids']).long(),
             'sentiment': row['sentiment'],
             'attention_mask': torch.tensor(row['attention_mask']).long(),
+            'special_tokens_mask': torch.tensor(row['special_tokens_mask']).long(),
             'selected_text': row['selected_text'],
             'labels_head': torch.tensor(row['labels_head']),
             'labels_tail': torch.tensor(row['labels_tail']),
@@ -363,6 +367,7 @@ class TSEHeadTailSegmentationDataset(TSEHeadTailDataset):
             'input_ids': torch.tensor(row['input_ids']),
             'sentiment': row['sentiment'],
             'attention_mask': torch.tensor(row['attention_mask']),
+            'special_tokens_mask': torch.tensor(row['special_tokens_mask']).long(),
             'selected_text': row['selected_text'],
             'labels_head': torch.tensor(row['labels_head']),
             'labels_tail': torch.tensor(row['labels_tail']),

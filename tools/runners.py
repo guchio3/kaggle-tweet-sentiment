@@ -566,14 +566,19 @@ class r001SegmentationRunner(Runner):
             input_ids = batch['input_ids'].to(self.device)
             labels = batch['labels'].to(self.device)
             attention_mask = batch['attention_mask'].to(self.device)
+            special_tokens_mask = batch['special_tokens_mask'].to(self.device)
 
             (logits, ) = model(
                 input_ids=input_ids,
                 labels=labels,
                 attention_mask=attention_mask,
+                special_tokens_mask=special_tokens_mask,
             )
 
             train_loss = fobj(logits, labels)
+            if train_loss == float('inf'):
+                from pudb import set_trace
+                set_trace()
 
             optimizer.zero_grad()
             train_loss.backward()
@@ -602,10 +607,13 @@ class r001SegmentationRunner(Runner):
                 input_ids = batch['input_ids'].to(self.device)
                 labels = batch['labels'].to(self.device)
                 attention_mask = batch['attention_mask'].to(self.device)
+                special_tokens_mask = batch['special_tokens_mask'].to(
+                    self.device)
 
                 (logits, ) = model(
                     input_ids=input_ids,
                     attention_mask=attention_mask,
+                    # special_tokens_mask=special_tokens_mask,
                 )
 
                 valid_loss = fobj(logits, labels)
@@ -778,10 +786,12 @@ class r002HeadTailRunner(Runner):
             labels_head = batch['labels_head'].to(self.device)
             labels_tail = batch['labels_tail'].to(self.device)
             attention_mask = batch['attention_mask'].to(self.device)
+            special_tokens_mask = batch['special_tokens_mask'].to(self.device)
 
             (logits, ) = model(
                 input_ids=input_ids,
                 attention_mask=attention_mask,
+                # special_tokens_mask=special_tokens_mask,
             )
 
             logits_head = logits[0]
@@ -833,10 +843,13 @@ class r002HeadTailRunner(Runner):
                 labels_head = batch['labels_head'].to(self.device)
                 labels_tail = batch['labels_tail'].to(self.device)
                 attention_mask = batch['attention_mask'].to(self.device)
+                special_tokens_mask = batch['special_tokens_mask'].to(
+                    self.device)
 
                 (logits, ) = model(
                     input_ids=input_ids,
                     attention_mask=attention_mask,
+                    # special_tokens_mask=special_tokens_mask,
                 )
                 logits_head = logits[0]
                 logits_tail = logits[1]
@@ -987,10 +1000,13 @@ class r002HeadTailRunner(Runner):
                 input_ids = batch['input_ids'].to(self.device)
                 sentiment = batch['sentiment']
                 attention_mask = batch['attention_mask'].to(self.device)
+                special_tokens_mask = batch['special_tokens_mask'].to(
+                    self.device)
 
                 (logits, ) = model(
                     input_ids=input_ids,
                     attention_mask=attention_mask,
+                    # special_tokens_mask=special_tokens_mask,
                 )
                 logits_head = logits[0]
                 logits_tail = logits[1]

@@ -1,3 +1,4 @@
+import numpy as np
 import torch
 from tokenizers import ByteLevelBPETokenizer
 
@@ -8,7 +9,8 @@ class myBertByteLevelBPETokenizer(ByteLevelBPETokenizer):
 
     def encode_plus(self, text, text_pair, add_special_tokens,
                     max_length, pad_to_max_length=True, return_tensor='pt',
-                    return_token_type_ids=False, return_attention_mask=True):
+                    return_token_type_ids=False, return_attention_mask=True,
+                    return_special_tokens_mask=True):
         enc = self.encode(text)
         if add_special_tokens:
             input_ids = [101] + enc.ids + [102]
@@ -39,6 +41,9 @@ class myBertByteLevelBPETokenizer(ByteLevelBPETokenizer):
                     attention_mask += [0] * (max_length - valid_input_len)
                 res['attention_mask'] = attention_mask
 
+        if return_special_tokens_mask:
+            raise NotImplementedError()
+
         return res
 
     def decode(self, input_ids):
@@ -57,7 +62,8 @@ class myRobertaByteLevelBPETokenizer(ByteLevelBPETokenizer):
 
     def encode_plus(self, text, text_pair, add_special_tokens,
                     max_length, pad_to_max_length=True, return_tensor='pt',
-                    return_token_type_ids=False, return_attention_mask=True):
+                    return_token_type_ids=False, return_attention_mask=True,
+                    return_special_tokens_mask=True):
         enc = self.encode(text)
         if add_special_tokens:
             input_ids = [0] + enc.ids + [2]
@@ -95,6 +101,10 @@ class myRobertaByteLevelBPETokenizer(ByteLevelBPETokenizer):
                 # if return_tensor == 'pt':
                 #     attention_mask = torch.Tensor([attention_mask])
                 res['attention_mask'] = attention_mask
+
+        if return_special_tokens_mask:
+            special_tokens_mask = np.asarray(res['input_ids']) <= 2
+            res['special_tokens_mask'] = special_tokens_mask
 
         return res
 
