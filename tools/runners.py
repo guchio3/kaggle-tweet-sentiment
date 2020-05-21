@@ -578,7 +578,7 @@ class r001SegmentationRunner(Runner):
                 input_ids=input_ids,
                 labels=labels,
                 attention_mask=attention_mask,
-                special_tokens_mask=special_tokens_mask,
+                # special_tokens_mask=special_tokens_mask,
             )
 
             train_loss = fobj(logits, labels)
@@ -616,7 +616,7 @@ class r001SegmentationRunner(Runner):
                 (logits, ) = model(
                     input_ids=input_ids,
                     attention_mask=attention_mask,
-                    special_tokens_mask=special_tokens_mask,
+                    # special_tokens_mask=special_tokens_mask,
                 )
 
                 valid_loss = fobj(logits, labels)
@@ -800,11 +800,19 @@ class r002HeadTailRunner(Runner):
             logits_head = logits[0]
             logits_tail = logits[1]
 
-            train_loss = fobj(logits_head, labels_head)
-            train_loss += fobj(logits_tail, labels_tail)
-            # if train_loss == float('inf'):
-            #     from pudb import set_trace
-            #     set_trace()
+            temp_loss = fobj(logits_head, labels_head)
+            if temp_loss == float('inf'):
+                self.logger.warning(f'loss is nan for {batch_i}')
+            else:
+                train_loss = temp_loss
+            temp_loss = fobj(logits_tail, labels_tail)
+            if temp_loss == float('inf'):
+                self.logger.warning(f'loss is nan for {batch_i}')
+            else:
+                train_loss += temp_loss
+            if train_loss == float('inf'):
+                from pudb import set_trace
+                set_trace()
 
             if fobj_segmentation:
                 labels_segmentation = batch['labels_segmentation']\
@@ -1013,7 +1021,7 @@ class r002HeadTailRunner(Runner):
                 (logits, ) = model(
                     input_ids=input_ids,
                     attention_mask=attention_mask,
-                    special_tokens_mask=special_tokens_mask,
+                    # special_tokens_mask=special_tokens_mask,
                 )
                 logits_head = logits[0]
                 logits_tail = logits[1]

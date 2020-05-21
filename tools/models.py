@@ -359,16 +359,19 @@ class RobertaModelWDualMultiClassClassifierHeadV3(nn.Module):
         if pretrained_model_name_or_path:
             if isinstance(pretrained_model_name_or_path, str):
                 self.model = RobertaModel.from_pretrained(
-                    pretrained_model_name_or_path)
+                    pretrained_model_name_or_path,
+                    output_hidden_states=True)
             else:
                 # for sub
-                self.model = RobertaModel(pretrained_model_name_or_path)
+                self.model = RobertaModel(
+                    pretrained_model_name_or_path,
+                    output_hidden_states=True)
         else:
             raise NotImplementedError
         self.num_labels = num_labels
         self.dropout = nn.Dropout(0.2)
         self.classifier_head_tail = nn.Linear(
-            self.model.pooler.dense.out_features, 2)
+            self.model.pooler.dense.out_features * 2, 2)
 
     def forward(self, input_ids=None, attention_mask=None,
                 token_type_ids=None, position_ids=None, head_mask=None,
@@ -395,8 +398,11 @@ class RobertaModelWDualMultiClassClassifierHeadV3(nn.Module):
             logits_head = logits_head.where(special_tokens_mask == 0, -inf)
             logits_tail = logits_tail.where(special_tokens_mask == 0, -inf)
 
+        logits_head = logits_head.squeeze(-1)
+        logits_tail = logits_tail.squeeze(-1)
+
         # add hidden states and attention if they are here
-        outputs = ((logits_head, logits_tail),) + outputs[2:]
+        outputs = ((logits_head, logits_tail),)
 
         return outputs  # logits, (hidden_states), (attentions)
 
