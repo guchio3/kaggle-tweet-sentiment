@@ -827,7 +827,13 @@ class r002HeadTailRunner(Runner):
             if temp_loss == float('inf'):
                 self.logger.warning(f'tail loss is nan for {batch_i}')
                 for i in range(len(input_ids)):
-                    print(special_tokens_mask[i][labels_tail[i] - 1])
+                    if special_tokens_mask[i][labels_tail[i] - 1] == 1:
+                        print('--------------------------')
+                        print(batch['textID'][i])
+                        print(input_ids[i])
+                        print(labels_head[i])
+                        print(labels_tail[i])
+                        exit(0)
             else:
                 train_loss += temp_loss
             if train_loss == float('inf'):

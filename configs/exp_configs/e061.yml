@@ -1,4 +1,4 @@
-description: "e059 use special mask"
+description: "e059 use special token mask"
 runner: r002
 SINGLE_FOLD: false
 split:
@@ -49,3 +49,5 @@ predict:
     neutral_origin: true
     head_tail_equal_handle: tail
     use_special_mask: true
+invalid_labels:
+    # - ./inputs/nes_info/invalid_labels.csv

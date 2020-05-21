@@ -257,7 +257,10 @@ class TSEHeadTailDataset(TSEDataset):
         row['labels_head'] = best_matched_i
         # row['labels_tail'] = best_matched_i + len(sel_input_ids)
         # 時々ラベルミスで sel_input_ids の方が長くなる
-        i_length = min(len(sel_input_ids), row['special_tokens_mask'].sum())
+        # -1 for sentiment
+        i_length = min(
+            len(sel_input_ids),
+            (row['special_tokens_mask'] == 0).sum() - 1)
         row['labels_tail'] = best_matched_i + i_length
         return row
 
