@@ -493,3 +493,39 @@ class TSEHeadTailSegmentationDataset(TSEHeadTailDataset):
         row['labels_segmentation'][np.asarray(
             row['input_ids']) != pad_token] = -1
         return row
+
+
+class TSEHeadTailSegmentationDatasetV3(TSEHeadTailDatasetV3):
+
+    def __getitem__(self, idx):
+        row = self.df.loc[idx]
+
+        row = self._prep_text(row)
+
+        return {
+            'textID': row['textID'],
+            'text': row['text'],
+            'input_ids': torch.tensor(row['input_ids']),
+            'sentiment': row['sentiment'],
+            'attention_mask': torch.tensor(row['attention_mask']),
+            'special_tokens_mask': torch.tensor(row['special_tokens_mask']).long(),
+            'selected_text': row['selected_text'],
+            'labels_head': torch.tensor(row['labels_head']),
+            'labels_tail': torch.tensor(row['labels_tail']),
+            'labels_segmentation': torch.tensor(row['labels_segmentation']),
+        }
+
+    def _prep_text(self, row):
+        row = super()._prep_text(row)
+        labels_segmentation = np.zeros(self.max_length)
+        if row['labels_head'] >= 0 and row['labels_tail'] >= 0:
+            labels_segmentation[row['labels_head']:row['labels_tail']] = 1
+        row['labels_segmentation'] = labels_segmentation
+        pad_token = self.tokenizer.encode_plus(
+            self.tokenizer.special_tokens_map['pad_token'],
+            text_pair=None,
+            add_special_tokens=False,
+            max_length=1)['input_ids'][0]
+        row['labels_segmentation'][np.asarray(
+            row['input_ids']) != pad_token] = -1
+        return row

@@ -16,6 +16,7 @@ import torch.optim as optim
 from tools.datasets import (TSEHeadTailDataset, TSEHeadTailDatasetV2,
                             TSEHeadTailDatasetV3,
                             TSEHeadTailSegmentationDataset,
+                            TSEHeadTailSegmentationDatasetV3,
                             TSESegmentationDataset)
 from tools.loggers import myLogger
 from tools.losses import lovasz_hinge
@@ -463,7 +464,11 @@ class Runner(object):
                                                      logger=self.logger,
                                                      debug=self.debug,
                                                      **self.cfg_dataset)
-
+        elif dataset_type == 'tse_headtail_segmentation_dataset_v3':
+            dataset = TSEHeadTailSegmentationDatasetV3(mode=mode, df=df,
+                                                       logger=self.logger,
+                                                       debug=self.debug,
+                                                       **self.cfg_dataset)
         else:
             raise NotImplementedError()
 
