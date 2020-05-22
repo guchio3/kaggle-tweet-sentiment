@@ -25,6 +25,8 @@ from tools.models import (
     EMA, BertModelWBinaryMultiLabelClassifierHead,
     BertModelWDualMultiClassClassifierHead,
     RobertaModelWDualMultiClassClassifierAndSegmentationHead,
+    RobertaModelWDualMultiClassClassifierAndSegmentationHeadV4,
+    RobertaModelWDualMultiClassClassifierAndSegmentationHeadV5,
     RobertaModelWDualMultiClassClassifierHead,
     RobertaModelWDualMultiClassClassifierHeadV2,
     RobertaModelWDualMultiClassClassifierHeadV3,
@@ -364,6 +366,16 @@ class Runner(object):
             )
         elif model_type == 'roberta-headtail-segmentation':
             model = RobertaModelWDualMultiClassClassifierAndSegmentationHead(
+                num_output_units,
+                pretrained_model_name_or_path
+            )
+        elif model_type == 'roberta-headtail-segmentation-v4':
+            model = RobertaModelWDualMultiClassClassifierAndSegmentationHeadV4(
+                num_output_units,
+                pretrained_model_name_or_path
+            )
+        elif model_type == 'roberta-headtail-segmentation-v5':
+            model = RobertaModelWDualMultiClassClassifierAndSegmentationHeadV5(
                 num_output_units,
                 pretrained_model_name_or_path
             )
