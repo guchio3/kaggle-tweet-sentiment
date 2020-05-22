@@ -29,6 +29,8 @@ if __name__ == '__main__':
     debug = args.debug
     with open(f'{CONFIG_DIR}/{exp_id}.yml', 'r') as fin:
         config = yaml.load(fin, Loader=yaml.SafeLoader)
+    with open(f'{CONFIG_DIR}/e000.yml', 'r') as fin:
+        default_config = yaml.load(fin, Loader=yaml.SafeLoader)
 
     if config['runner'] == 'r001':
         from tools.runners import r001SegmentationRunner as Runner
@@ -36,5 +38,5 @@ if __name__ == '__main__':
         from tools.runners import r002HeadTailRunner as Runner
     else:
         raise NotImplementedError(f'{config["runner"]} is not implemented.')
-    runner = Runner(exp_id, checkpoint, device, debug, config)
+    runner = Runner(exp_id, checkpoint, device, debug, config, default_config)
     runner.train()
