@@ -321,7 +321,7 @@ class Runner(object):
         if fobj_type == 'bce':
             fobj = BCEWithLogitsLoss()
         elif fobj_type == 'bce_raw':
-            fobj = BCELoss(reduction='sum')
+            fobj = BCELoss(reduction='mean')
         elif fobj_type == 'ce':
             fobj = CrossEntropyLoss()
         elif fobj_type == 'lovasz':

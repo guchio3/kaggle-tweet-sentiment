@@ -47,6 +47,7 @@ train:
         - 4
         - 8
         - 16
+    segmentation_loss_ratios: 10
 predict:
     neutral_origin: true
     head_tail_equal_handle: tail
