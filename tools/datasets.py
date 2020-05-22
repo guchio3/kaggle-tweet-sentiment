@@ -508,7 +508,7 @@ class TSEHeadTailSegmentationDatasetV3(TSEHeadTailDatasetV3):
             'input_ids': torch.tensor(row['input_ids']),
             'sentiment': row['sentiment'],
             'attention_mask': torch.tensor(row['attention_mask']),
-            'special_tokens_mask': torch.tensor(row['special_tokens_mask']).long(),
+            # 'special_tokens_mask': torch.tensor(row['special_tokens_mask']).long(),
             'selected_text': row['selected_text'],
             'labels_head': torch.tensor(row['labels_head']),
             'labels_tail': torch.tensor(row['labels_tail']),

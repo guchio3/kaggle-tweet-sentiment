@@ -24,9 +24,11 @@ model:
     num_output_units: 125
 fobj:
     fobj_type: ce
+fobj_segmentation:
+    fobj_type: bce
 optimizer:
     optim_type: adam
-    lr: 0.00003
+    lr: 0.00005
 scheduler:
     scheduler_type: every_step
     every_step_unit: 0.5
