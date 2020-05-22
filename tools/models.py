@@ -696,3 +696,54 @@ class RobertaModelWDualMultiClassClassifierAndSegmentationHeadV5(
                     logits_segmentation),)
 
         return outputs  # logits, (hidden_states), (attentions)
+
+
+class RobertaModelWDualMultiClassClassifierAndCumsumSegmentationHead(
+        RobertaModelWDualMultiClassClassifierHead):
+    def __init__(self, num_labels, pretrained_model_name_or_path):
+        super().__init__(num_labels, pretrained_model_name_or_path)
+        self.softmax = nn.Softmax(dim=1)
+        self.relu = nn.ReLU()
+
+    def forward(self, input_ids=None, attention_mask=None,
+                token_type_ids=None, position_ids=None, head_mask=None,
+                inputs_embeds=None, encoder_hidden_states=None,
+                encoder_attention_mask=None, special_tokens_mask=None):
+        outputs = self.model(input_ids,
+                             attention_mask=attention_mask,
+                             token_type_ids=token_type_ids,
+                             position_ids=position_ids,
+                             head_mask=head_mask,
+                             inputs_embeds=inputs_embeds,
+                             encoder_hidden_states=encoder_hidden_states,
+                             encoder_attention_mask=encoder_attention_mask)
+        output = outputs[0]
+        output = torch.transpose(output, 1, 2)
+        output = self.dropout(output)
+        logits_head = self.classifier_conv_head(output).squeeze()
+        logits_tail = self.classifier_conv_tail(output).squeeze()
+
+        prob_head = self.softmax(logits_head.double())
+        prob_tail = self.softmax(logits_tail.double())
+        cumsum_head = torch.cumsum(prob_head, dim=1)
+        cumsum_tail = torch.cumsum(prob_tail, dim=1)
+        cumsum_pred = self.relu(cumsum_head - cumsum_tail) + 1e-7
+
+        # special tokes を -inf で mask
+        if special_tokens_mask is not None:
+            inf = torch.tensor(float('inf')).to(logits_head.device)
+            logits_head = logits_head.where(special_tokens_mask == 0, -inf)
+            # we use [head:tail] type indexing,
+            # so tail mask should be shifted
+            tail_special_tokens_mask = torch.cat(
+                [special_tokens_mask[:, -1:],
+                 special_tokens_mask[:, :-1]],
+                dim=1)
+            logits_tail = logits_tail.where(
+                tail_special_tokens_mask == 0, -inf)
+
+        # add hidden states and attention if they are here
+        outputs = ((logits_head, logits_tail,
+                    cumsum_pred),)
+
+        return outputs  # logits, (hidden_states), (attentions)

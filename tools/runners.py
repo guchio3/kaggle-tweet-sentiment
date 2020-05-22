@@ -17,6 +17,7 @@ from tools.datasets import (TSEHeadTailDataset, TSEHeadTailDatasetV2,
                             TSEHeadTailDatasetV3,
                             TSEHeadTailSegmentationDataset,
                             TSEHeadTailSegmentationDatasetV3,
+                            TSEHeadTailSegmentationDatasetV4,
                             TSESegmentationDataset)
 from tools.loggers import myLogger
 from tools.losses import lovasz_hinge
@@ -25,6 +26,7 @@ from tools.models import (
     EMA, BertModelWBinaryMultiLabelClassifierHead,
     BertModelWDualMultiClassClassifierHead,
     RobertaModelWDualMultiClassClassifierAndSegmentationHead,
+    RobertaModelWDualMultiClassClassifierAndCumsumSegmentationHead,
     RobertaModelWDualMultiClassClassifierAndSegmentationHeadV4,
     RobertaModelWDualMultiClassClassifierAndSegmentationHeadV5,
     RobertaModelWDualMultiClassClassifierHead,
@@ -34,7 +36,8 @@ from tools.models import (
     RobertaModelWDualMultiClassClassifierHeadV5)
 from tools.schedulers import pass_scheduler
 from tools.splitters import mySplitter
-from torch.nn import BCEWithLogitsLoss, CrossEntropyLoss, Sigmoid, Softmax
+from torch.nn import (BCELoss, BCEWithLogitsLoss, CrossEntropyLoss, Sigmoid,
+                      Softmax)
 from torch.utils.data import DataLoader
 from torch.utils.data.sampler import RandomSampler, SequentialSampler
 
@@ -317,6 +320,8 @@ class Runner(object):
     def _get_fobj(self, fobj_type):
         if fobj_type == 'bce':
             fobj = BCEWithLogitsLoss()
+        elif fobj_type == 'bce_raw':
+            fobj = BCELoss(reduction='sum')
         elif fobj_type == 'ce':
             fobj = CrossEntropyLoss()
         elif fobj_type == 'lovasz':
@@ -366,6 +371,11 @@ class Runner(object):
             )
         elif model_type == 'roberta-headtail-segmentation':
             model = RobertaModelWDualMultiClassClassifierAndSegmentationHead(
+                num_output_units,
+                pretrained_model_name_or_path
+            )
+        elif model_type == 'roberta-headtail-cumsum-segmentation':
+            model = RobertaModelWDualMultiClassClassifierAndCumsumSegmentationHead(
                 num_output_units,
                 pretrained_model_name_or_path
             )
@@ -478,6 +488,11 @@ class Runner(object):
                                                      **self.cfg_dataset)
         elif dataset_type == 'tse_headtail_segmentation_dataset_v3':
             dataset = TSEHeadTailSegmentationDatasetV3(mode=mode, df=df,
+                                                       logger=self.logger,
+                                                       debug=self.debug,
+                                                       **self.cfg_dataset)
+        elif dataset_type == 'tse_headtail_segmentation_dataset_v4':
+            dataset = TSEHeadTailSegmentationDatasetV4(mode=mode, df=df,
                                                        logger=self.logger,
                                                        debug=self.debug,
                                                        **self.cfg_dataset)
@@ -872,9 +887,6 @@ class r002HeadTailRunner(Runner):
                         exit(0)
             else:
                 train_loss += temp_loss
-            if train_loss == float('inf'):
-                from pudb import set_trace
-                set_trace()
 
             if fobj_segmentation:
                 labels_segmentation = batch['labels_segmentation']\
@@ -882,10 +894,15 @@ class r002HeadTailRunner(Runner):
                 logits_segmentation = logits[2]
                 # logits_segmentation *= attention_mask
 
-                train_loss += segmentation_loss_ratio * \
-                    fobj_segmentation(logits_segmentation,
-                                      labels_segmentation,
-                                      ignore=-1)
+                if self.cfg_fobj_segmentation['fobj_type'] == 'lovasz':
+                    train_loss += segmentation_loss_ratio * \
+                        fobj_segmentation(logits_segmentation,
+                                          labels_segmentation,
+                                          ignore=-1)
+                else:
+                    train_loss += segmentation_loss_ratio * \
+                        fobj_segmentation(logits_segmentation,
+                                          labels_segmentation)
 
             train_loss.backward()
 
