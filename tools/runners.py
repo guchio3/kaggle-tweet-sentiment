@@ -14,6 +14,7 @@ from tqdm import tqdm
 import torch
 import torch.optim as optim
 from tools.datasets import (TSEHeadTailDataset, TSEHeadTailDatasetV2,
+                            TSEHeadTailDatasetV3,
                             TSEHeadTailSegmentationDataset,
                             TSESegmentationDataset)
 from tools.loggers import myLogger
@@ -237,11 +238,11 @@ class Runner(object):
                     fobj_segmentation, segmentation_loss_ratio)
                 ema.on_epoch_end(model)
                 ema.set_weights(ema_model)  # NOTE: model?
-                use_special_mask = self.cfg_predict['use_special_mask']
+                use_offsets = self.cfg_predict['use_offsets']
                 val_loss, best_thresh, best_jaccard, val_textIDs, \
                     val_input_ids, val_preds, val_labels = \
-                    self._valid_loop(
-                        ema_model, fobj, val_loader, use_special_mask)
+                    self._valid_loop(ema_model, fobj, val_loader,
+                                     use_special_mask, use_offsets)
                 epoch_best_jaccard = max(epoch_best_jaccard, best_jaccard)
 
                 self.logger.info(
@@ -449,6 +450,11 @@ class Runner(object):
                                          debug=self.debug, **self.cfg_dataset)
         elif dataset_type == 'tse_headtail_dataset_v2':
             dataset = TSEHeadTailDatasetV2(mode=mode, df=df,
+                                           logger=self.logger,
+                                           debug=self.debug,
+                                           **self.cfg_dataset)
+        elif dataset_type == 'tse_headtail_dataset_v3':
+            dataset = TSEHeadTailDatasetV3(mode=mode, df=df,
                                            logger=self.logger,
                                            debug=self.debug,
                                            **self.cfg_dataset)
@@ -736,7 +742,7 @@ class Runner(object):
 
 
 class r002HeadTailRunner(Runner):
-    def predict(self, tst_filename, checkpoints):
+    def predict(self, tst_filename, checkpoints, use_offsets):
         fold_test_preds_heads, fold_test_preds_tails = [], []
         for checkpoint in checkpoints:
             # load and preprocess train.csv
@@ -771,10 +777,12 @@ class r002HeadTailRunner(Runner):
 
             model = model.to(self.device)
 
-            use_special_mask = self.cfg_predict['use_special_mask']
-            textIDs, test_texts, test_input_ids, \
+            use_special_mask = self.cfg_train['use_special_mask']
+            use_offsets = self.cfg_predict['use_offsets']
+            textIDs, test_texts, test_input_ids, test_offsets, \
                 test_sentiments, test_preds_head, test_preds_tail\
-                = self._test_loop(model, tst_loader, use_special_mask)
+                = self._test_loop(model, tst_loader,
+                                  use_special_mask, use_offsets)
 
             fold_test_preds_heads.append(test_preds_head)
             fold_test_preds_tails.append(test_preds_tail)
@@ -783,15 +791,26 @@ class r002HeadTailRunner(Runner):
             torch.stack(fold_test_preds_heads), dim=0)
         avg_test_preds_tail = torch.mean(
             torch.stack(fold_test_preds_tails), dim=0)
-        predicted_texts = self._get_predicted_texts(
-            test_texts,
-            test_input_ids,
-            test_sentiments,
-            avg_test_preds_head,
-            avg_test_preds_tail,
-            tst_loader.dataset.tokenizer,
-            **self.cfg_predict,
-        )
+        if use_offsets:
+            predicted_texts = self._get_predicted_texts_offsets(
+                test_texts,
+                test_offsets,
+                test_sentiments,
+                avg_test_preds_head,
+                avg_test_preds_tail,
+                self.cfg_predict['neutral_origin'],
+                self.cfg_predict['head_tail_equal_handle'],
+            )
+        else:
+            predicted_texts = self._get_predicted_texts(
+                test_texts,
+                test_input_ids,
+                test_sentiments,
+                avg_test_preds_head,
+                avg_test_preds_tail,
+                tst_loader.dataset.tokenizer,
+                **self.cfg_predict,
+            )
 
         return textIDs, predicted_texts
 
@@ -865,7 +884,7 @@ class r002HeadTailRunner(Runner):
 
         return train_loss
 
-    def _valid_loop(self, model, fobj, loader, use_special_mask):
+    def _valid_loop(self, model, fobj, loader, use_special_mask, use_offsets):
         model.eval()
         softmax = Softmax(dim=1)
         running_loss = 0
@@ -875,6 +894,7 @@ class r002HeadTailRunner(Runner):
             valid_texts = []
             valid_textIDs = []
             valid_input_ids = []
+            valid_offsets = []
             valid_sentiments = []
             valid_selected_texts = []
             valid_preds_head, valid_preds_tail = [], []
@@ -883,6 +903,8 @@ class r002HeadTailRunner(Runner):
                 textIDs = batch['textID']
                 valid_text = batch['text']
                 input_ids = batch['input_ids'].to(self.device)
+                if use_offsets:
+                    valid_offset = batch['offsets'].to(self.device)
                 valid_sentiment = batch['sentiment']
                 selected_texts = batch['selected_text']
                 labels_head = batch['labels_head'].to(self.device)
@@ -910,6 +932,8 @@ class r002HeadTailRunner(Runner):
                 valid_textIDs_list.append(textIDs)
                 valid_texts.append(valid_text)
                 valid_input_ids.append(input_ids.cpu())
+                if use_offsets:
+                    valid_offsets.append(valid_offset.cpu())
                 valid_sentiments.append(valid_sentiment)
                 valid_selected_texts.append(selected_texts)
                 valid_preds_head.append(predicted_head.cpu())
@@ -923,6 +947,8 @@ class r002HeadTailRunner(Runner):
                 itertools.chain.from_iterable(valid_textIDs_list))
             valid_texts = list(itertools.chain.from_iterable(valid_texts))
             valid_input_ids = torch.cat(valid_input_ids)
+            if use_offsets:
+                valid_offsets = torch.cat(valid_offsets)
             valid_sentiments = list(
                 itertools.chain.from_iterable(valid_sentiments))
             valid_selected_texts = list(
@@ -932,20 +958,32 @@ class r002HeadTailRunner(Runner):
             valid_labels_head = torch.cat(valid_labels_head)
             valid_labels_tail = torch.cat(valid_labels_tail)
 
-            best_thresh, best_jaccard = \
-                self._calc_jaccard(valid_texts,
-                                   valid_input_ids,
-                                   valid_sentiments,
-                                   valid_selected_texts,
-                                   # valid_labels_head,
-                                   # valid_labels_tail,
-                                   valid_preds_head,
-                                   valid_preds_tail,
-                                   loader.dataset.tokenizer,
-                                   self.cfg_train['thresh_unit'],
-                                   self.cfg_predict['neutral_origin'],
-                                   self.cfg_predict['head_tail_equal_handle'],
-                                   )
+            if use_offsets:
+                best_thresh, best_jaccard = \
+                    self._calc_jaccard_offsets(valid_texts,
+                                               valid_offsets,
+                                               valid_sentiments,
+                                               valid_selected_texts,
+                                               valid_preds_head,
+                                               valid_preds_tail,
+                                               self.cfg_predict['neutral_origin'],
+                                               self.cfg_predict['head_tail_equal_handle'],
+                                               )
+            else:
+                best_thresh, best_jaccard = \
+                    self._calc_jaccard(valid_texts,
+                                       valid_input_ids,
+                                       valid_sentiments,
+                                       valid_selected_texts,
+                                       # valid_labels_head,
+                                       # valid_labels_tail,
+                                       valid_preds_head,
+                                       valid_preds_tail,
+                                       loader.dataset.tokenizer,
+                                       self.cfg_train['thresh_unit'],
+                                       self.cfg_predict['neutral_origin'],
+                                       self.cfg_predict['head_tail_equal_handle'],
+                                       )
 
         valid_preds = (valid_preds_head, valid_preds_tail)
         valid_labels = (valid_labels_head, valid_labels_tail)
@@ -1029,7 +1067,69 @@ class r002HeadTailRunner(Runner):
 
         return best_thresh, best_jaccard
 
-    def _test_loop(self, model, loader, use_special_mask):
+    def _get_predicted_texts_offsets(self, texts, offsets_list, sentiments,
+                                     y_preds_head, y_preds_tail,
+                                     neutral_origin=False,
+                                     head_tail_equal_handle='tail'):
+        predicted_texts = []
+        for text, offsets, sentiment, y_pred_head, y_pred_tail \
+                in zip(texts, offsets_list, sentiments,
+                       y_preds_head, y_preds_tail):
+            if neutral_origin and sentiment == 'neutral' \
+                    or len(text.split()) < 2:
+                predicted_texts.append(text)
+                continue
+            text = ' ' + ' '.join(text.split())
+            pred_label_head = y_pred_head.argmax()
+            pred_label_tail = y_pred_tail.argmax()
+            # if pred_label_head > pred_label_tail:
+            #     predicted_text = text
+            # elif pred_label_head == pred_label_tail:
+            if pred_label_head >= pred_label_tail:
+                if head_tail_equal_handle == 'nothing':
+                    pass
+                elif head_tail_equal_handle == 'head':
+                    pred_label_tail = pred_label_head + 1
+                elif head_tail_equal_handle == 'tail':
+                    pred_label_head = pred_label_tail - 1
+                else:
+                    raise NotImplementedError()
+
+            predicted_text = ''
+            for ix in range(pred_label_head, pred_label_tail):
+                predicted_text += text[offsets[ix][0]:offsets[ix][1]]
+                if (ix + 1) < len(offsets) and \
+                        offsets[ix][1] < offsets[ix + 1][0]:
+                    predicted_text += ' '
+            predicted_texts.append(predicted_text)
+
+        return predicted_texts
+
+    def _calc_jaccard_offsets(self, texts, offsets_list,
+                              sentiments, selected_texts,
+                              y_preds_head, y_preds_tail,
+                              neutral_origin=False,
+                              head_tail_equal_handle='tail'):
+        temp_jaccard = 0
+        predicted_texts = self._get_predicted_texts_offsets(
+            texts,
+            offsets_list,
+            sentiments,
+            y_preds_head,
+            y_preds_tail,
+            neutral_origin,
+            head_tail_equal_handle,
+        )
+        for selected_text, predicted_text in zip(
+                selected_texts, predicted_texts):
+            temp_jaccard += jaccard(selected_text, predicted_text)
+
+        best_thresh = -1
+        best_jaccard = temp_jaccard / len(texts)
+
+        return best_thresh, best_jaccard
+
+    def _test_loop(self, model, loader, use_special_mask, use_offsets):
         model.eval()
         softmax = Softmax(dim=1)
 
@@ -1037,6 +1137,7 @@ class r002HeadTailRunner(Runner):
             textIDs = []
             test_texts = []
             test_input_ids = []
+            test_offsets = []
             test_sentiments = []
             test_preds_head = []
             test_preds_tail = []
@@ -1045,6 +1146,8 @@ class r002HeadTailRunner(Runner):
                 textID = batch['textID']
                 test_text = batch['text']
                 input_ids = batch['input_ids'].to(self.device)
+                if use_offsets:
+                    offsets = batch['offsets'].to(self.device)
                 sentiment = batch['sentiment']
                 attention_mask = batch['attention_mask'].to(self.device)
                 special_tokens_mask = batch['special_tokens_mask'].to(self.device) \
@@ -1064,6 +1167,7 @@ class r002HeadTailRunner(Runner):
                 test_texts.append(test_text)
                 textIDs.append(textID)
                 test_input_ids.append(input_ids.cpu())
+                test_offsets.append(offsets.cpu())
                 test_sentiments.append(sentiment)
                 test_preds_head.append(predicted_head.cpu())
                 test_preds_tail.append(predicted_tail.cpu())
@@ -1071,9 +1175,10 @@ class r002HeadTailRunner(Runner):
             test_texts = list(chain.from_iterable(test_texts))
             textIDs = list(chain.from_iterable(textIDs))
             test_input_ids = torch.cat(test_input_ids)
+            test_offsets = torch.cat(test_offsets)
             test_sentiments = list(chain.from_iterable(test_sentiments))
             test_preds_head = torch.cat(test_preds_head)
             test_preds_tail = torch.cat(test_preds_tail)
 
-        return textIDs, test_texts, test_input_ids, \
+        return textIDs, test_texts, test_input_ids, test_offsets, \
             test_sentiments, test_preds_head, test_preds_tail

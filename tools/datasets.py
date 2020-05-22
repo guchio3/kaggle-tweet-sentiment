@@ -255,13 +255,13 @@ class TSEHeadTailDataset(TSEDataset):
             # self.logger.debug(f'textID: {row["textID"]} -- no matching.')
 
         row['labels_head'] = best_matched_i
-        # row['labels_tail'] = best_matched_i + len(sel_input_ids)
+        row['labels_tail'] = best_matched_i + len(sel_input_ids)
         # 時々ラベルミスで sel_input_ids の方が長くなる
         # -1 for sentiment
-        i_length = min(
-            len(sel_input_ids),
-            (row['special_tokens_mask'] == 0).sum() - 1)
-        row['labels_tail'] = best_matched_i + i_length
+        # i_length = min(
+        #     len(sel_input_ids),
+        #     (row['special_tokens_mask'] == 0).sum() - 1)
+        # row['labels_tail'] = best_matched_i + i_length
         return row
 
 
@@ -355,6 +355,106 @@ class TSEHeadTailDatasetV2(TSEDataset):
         else:
             row['labels_head'] = 1
             row['labels_tail'] = 1 + len(enc.ids)  # == len(offsets)
+
+        return row
+
+
+class TSEHeadTailDatasetV3(TSEDataset):
+    '''
+    use kernal text preprocess logic
+    https://www.kaggle.com/abhishek/roberta-inference-5-folds
+
+    '''
+
+    def __getitem__(self, idx):
+        row = self.df.loc[idx]
+
+        if row['input_ids'] is None:
+            row = self._prep_text(row)
+            self.df.loc[idx, 'input_ids'] = row['input_ids']
+            self.df.loc[idx, 'labels'] = row['labels']
+            self.df.loc[idx, 'attention_mask'] = row['attention_mask']
+
+        return {
+            'textID': row['textID'],
+            'text': row['text'],
+            'input_ids': torch.tensor(row['input_ids']).long(),
+            'offsets': torch.tensor(row['offsets']).long(),
+            'sentiment': row['sentiment'],
+            'attention_mask': torch.tensor(row['attention_mask']).long(),
+            # 'special_tokens_mask': torch.tensor(row['special_tokens_mask']).long(),
+            'selected_text': row['selected_text'],
+            'labels_head': torch.tensor(row['labels_head']),
+            'labels_tail': torch.tensor(row['labels_tail']),
+        }
+
+    def _prep_text(self, row):
+        if self.add_pair_prefix_space:
+            sentiment_id = {
+                'positive': [1313],
+                'negative': [2430],
+                'neutral': [7974]}
+        else:
+            sentiment_id = {
+                'positive': [22173],
+                'negative': [33407],
+                'neutral': [12516]}
+
+        # this is test case
+        if 'selected_text' not in row:
+            row['selected_text'] = ''
+
+        tweet = " " + " ".join(row['text'].split())
+        selected_text = " " + " ".join(row['selected_text'].split())
+
+        len_st = len(selected_text) - 1
+        idx0 = None
+        idx1 = None
+
+        for ind in (i for i, e in enumerate(tweet) if e == selected_text[1]):
+            if " " + tweet[ind: ind + len_st] == selected_text:
+                idx0 = ind
+                idx1 = ind + len_st - 1
+                break
+
+        char_targets = [0] * len(tweet)
+        if idx0 is not None and idx1 is not None:
+            for ct in range(idx0, idx1 + 1):
+                char_targets[ct] = 1
+
+        tok_tweet = self.tokenizer.encode(tweet)
+        input_ids_orig = tok_tweet.ids
+        tweet_offsets = tok_tweet.offsets
+
+        target_idx = []
+        for j, (offset1, offset2) in enumerate(tweet_offsets):
+            if sum(char_targets[offset1: offset2]) > 0:
+                target_idx.append(j)
+
+        targets_start = target_idx[0]
+        targets_end = target_idx[-1]
+
+        input_ids = [0] + sentiment_id[row['sentiment']] + \
+            [2] + [2] + input_ids_orig + [2]
+        token_type_ids = [0, 0, 0, 0] + [0] * (len(input_ids_orig) + 1)
+        mask = [1] * len(token_type_ids)
+        tweet_offsets = [(0, 0)] * 4 + tweet_offsets + [(0, 0)]
+        targets_start += 4
+        targets_end += 4
+
+        padding_length = self.max_length - len(input_ids)
+        if padding_length > 0:
+            input_ids = input_ids + ([1] * padding_length)
+            mask = mask + ([0] * padding_length)
+            token_type_ids = token_type_ids + ([0] * padding_length)
+            tweet_offsets = tweet_offsets + ([(0, 0)] * padding_length)
+
+        row['input_ids'] = input_ids
+        row['attention_mask'] = mask
+        row['token_type_ids'] = token_type_ids
+        row['labels_head'] = targets_start
+        row['labels_tail'] = targets_end + 1
+        row['offsets'] = tweet_offsets
 
         return row
 
