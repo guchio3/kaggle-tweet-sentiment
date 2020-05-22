@@ -641,7 +641,7 @@ class RobertaModelWDualMultiClassClassifierAndSegmentationHeadV4(
 
         # add hidden states and attention if they are here
         outputs = ((logits_head, logits_tail,
-                    logits_segmentation),) + outputs[2:]
+                    logits_segmentation),)
 
         return outputs  # logits, (hidden_states), (attentions)
 
@@ -693,6 +693,6 @@ class RobertaModelWDualMultiClassClassifierAndSegmentationHeadV5(
 
         # add hidden states and attention if they are here
         outputs = ((logits_head, logits_tail,
-                    logits_segmentation),) + outputs[2:]
+                    logits_segmentation),)
 
         return outputs  # logits, (hidden_states), (attentions)
