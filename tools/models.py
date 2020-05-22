@@ -264,7 +264,7 @@ class RobertaModelWDualMultiClassClassifierAndSegmentationHead(
     def forward(self, input_ids=None, attention_mask=None,
                 token_type_ids=None, position_ids=None, head_mask=None,
                 inputs_embeds=None, encoder_hidden_states=None,
-                encoder_attention_mask=None, special_tokens_mask=None):
+                encoder_attention_mask=None, special_tokens_mask=None, **kwargs):
         outputs = self.model(input_ids,
                              attention_mask=attention_mask,
                              token_type_ids=token_type_ids,
@@ -280,6 +280,19 @@ class RobertaModelWDualMultiClassClassifierAndSegmentationHead(
         logits_tail = self.classifier_conv_tail(output).squeeze()
         logits_segmentation = self.classifier_conv_segmentation(
             output).squeeze()
+
+        # special tokes を -inf で mask
+        if special_tokens_mask is not None:
+            inf = torch.tensor(float('inf')).to(logits_head.device)
+            logits_head = logits_head.where(special_tokens_mask == 0, -inf)
+            # we use [head:tail] type indexing,
+            # so tail mask should be shifted
+            tail_special_tokens_mask = torch.cat(
+                [special_tokens_mask[:, -1:],
+                 special_tokens_mask[:, :-1]],
+                dim=1)
+            logits_tail = logits_tail.where(
+                tail_special_tokens_mask == 0, -inf)
 
         # add hidden states and attention if they are here
         outputs = ((logits_head, logits_tail,
