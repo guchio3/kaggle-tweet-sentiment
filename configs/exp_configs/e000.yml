@@ -26,6 +26,8 @@ model:
     num_output_units: 125
 fobj:
     fobj_type: ce
+fobj_index_diff:
+    fobj_type: nothing
 fobj_segmentation:
     fobj_type: nothing
 optimizer:

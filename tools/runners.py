@@ -914,14 +914,14 @@ class r002HeadTailRunner(Runner):
             if fobj_index_diff:
                 pred_index_head = softargmax1d(logits_head)
                 pred_index_tail = softargmax1d(logits_tail)
-                # pred_index_diff = pred_index_tail - pred_index_head
-                # labels_index_diff = (labels_tail - labels_head).float()
-                # train_loss += 0.001 * fobj_index_diff(pred_index_diff,
-                #                                       labels_index_diff)
-                train_loss += 0.001 * fobj_index_diff(pred_index_head,
-                                                      labels_head.float())
-                train_loss += 0.001 * fobj_index_diff(pred_index_tail,
-                                                      labels_tail.float())
+                pred_index_diff = pred_index_tail - pred_index_head
+                labels_index_diff = (labels_tail - labels_head).float()
+                train_loss += 0.001 * fobj_index_diff(pred_index_diff,
+                                                      labels_index_diff)
+                # train_loss += 0.003 * fobj_index_diff(pred_index_head,
+                #                                       labels_head.float())
+                # train_loss += 0.003 * fobj_index_diff(pred_index_tail,
+                #                                       labels_tail.float())
 
             train_loss.backward()
 
