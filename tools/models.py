@@ -42,6 +42,42 @@ class EMA(object):
             self._update(model)
 
 
+class SoftArgmax1D(torch.nn.Module):
+    """
+    Implementation of a 1d soft arg-max function as an nn.Module, so that we can differentiate through arg-max operations.
+    """
+
+    def __init__(self, base_index=0, step_size=1, beta=5., device='cpu'):
+        """
+        The "arguments" are base_index, base_index+step_size, base_index+2*step_size, ... and so on for
+        arguments at indices 0, 1, 2, ....
+        Assumes that the input to this layer will be a batch of 1D tensors (so a 2D tensor).
+        :param base_index: Remember a base index for 'indices' for the input
+        :param step_size: Step size for 'indices' from the input
+        """
+        super(SoftArgmax1D, self).__init__()
+        self.base_index = base_index
+        self.step_size = step_size
+        self.softmax = torch.nn.Softmax(dim=1).to(device)
+        self.beta = beta
+        self.device = device
+
+    def forward(self, x):
+        """
+        Compute the forward pass of the 1D soft arg-max function as defined below:
+        SoftArgMax(x) = \sum_i (i * softmax(x)_i)
+        :param x: The input to the soft arg-max layer
+        :return: Output of the soft arg-max layer
+        """
+        smax = self.softmax(x * self.beta)
+        end_index = self.base_index + x.size()[1] * self.step_size
+        indices = torch.arange(
+            start=self.base_index,
+            end=end_index,
+            step=self.step_size).to(self.device).float()
+        return torch.matmul(smax, indices)
+
+
 class BertModelWBinaryMultiLabelClassifierHead(nn.Module):
     def __init__(self, num_labels, pretrained_model_name_or_path):
         super().__init__()
@@ -299,6 +335,61 @@ class RobertaModelWDualMultiClassClassifierAndSegmentationHead(
                     logits_segmentation),) + outputs[2:]
 
         return outputs  # logits, (hidden_states), (attentions)
+
+
+class RobertaModelHeadClassAndAnchorHead(nn.Module):
+    def __init__(self, num_labels, pretrained_model_name_or_path):
+        super().__init__()
+        if pretrained_model_name_or_path:
+            if isinstance(pretrained_model_name_or_path, str):
+                self.model = RobertaModel.from_pretrained(
+                    pretrained_model_name_or_path)
+            else:
+                # for sub
+                self.model = RobertaModel(pretrained_model_name_or_path)
+        else:
+            raise NotImplementedError
+        self.num_labels = num_labels
+        self.relu = nn.ReLU()
+        self.dropout = nn.Dropout(0.2)
+        self.classifier_conv_head = nn.Conv1d(
+            self.model.pooler.dense.out_features, 1, 1)
+        self.classifier_conv_tail = nn.Conv1d(
+            self.model.pooler.dense.out_features, 1, 1)
+        self.classifier_anchor = nn.Linear(num_labels, 1)
+
+    def forward(self, input_ids=None, attention_mask=None,
+                token_type_ids=None, position_ids=None, head_mask=None,
+                inputs_embeds=None, encoder_hidden_states=None,
+                encoder_attention_mask=None, special_tokens_mask=None):
+        outputs = self.model(input_ids,
+                             attention_mask=attention_mask,
+                             token_type_ids=token_type_ids,
+                             position_ids=position_ids,
+                             head_mask=head_mask,
+                             inputs_embeds=inputs_embeds,
+                             encoder_hidden_states=encoder_hidden_states,
+                             encoder_attention_mask=encoder_attention_mask)
+
+        output = outputs[0]
+        output = torch.transpose(output, 1, 2)
+        output = self.dropout(output)
+        logits_head = self.classifier_conv_head(output).squeeze()
+        logits_tail = self.classifier_conv_tail(output).squeeze()
+        anchor_value = self.classifier_anchor(logits_tail)
+        anchor_value = self.relu(anchor_value)
+
+        # special tokes を -inf で mask
+        if special_tokens_mask is not None:
+            raise NotImplementedError()
+
+        # add hidden states and attention if they are here
+        outputs = ((logits_head, anchor_value),)
+
+        return outputs  # logits, (hidden_states), (attentions)
+
+    def resize_token_embeddings(self, token_num):
+        self.model.resize_token_embeddings(token_num)
 
 
 class RobertaModelWDualMultiClassClassifierHeadV2(nn.Module):
