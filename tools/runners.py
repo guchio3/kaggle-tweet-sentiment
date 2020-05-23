@@ -1421,7 +1421,8 @@ class r003HeadTailSegmentRunner(r002HeadTailRunner):
                 test_texts.append(test_text)
                 textIDs.append(textID)
                 test_input_ids.append(input_ids.cpu())
-                test_offsets.append(offsets.cpu())
+                if use_offsets:
+                    test_offsets.append(offsets.cpu())
                 test_sentiments.append(sentiment)
                 test_preds_head.append(predicted_head.cpu())
                 test_preds_tail.append(predicted_tail.cpu())
@@ -1429,7 +1430,8 @@ class r003HeadTailSegmentRunner(r002HeadTailRunner):
             test_texts = list(chain.from_iterable(test_texts))
             textIDs = list(chain.from_iterable(textIDs))
             test_input_ids = torch.cat(test_input_ids)
-            test_offsets = torch.cat(test_offsets)
+            if use_offsets:
+                test_offsets = torch.cat(test_offsets)
             test_sentiments = list(chain.from_iterable(test_sentiments))
             test_preds_head = torch.cat(test_preds_head)
             test_preds_tail = torch.cat(test_preds_tail)
