@@ -919,9 +919,9 @@ class r002HeadTailRunner(Runner):
                 # train_loss += 0.001 * fobj_index_diff(pred_index_diff,
                 #                                       labels_index_diff)
                 train_loss += 0.001 * fobj_index_diff(pred_index_head,
-                                                      labels_head)
+                                                      labels_head.float())
                 train_loss += 0.001 * fobj_index_diff(pred_index_tail,
-                                                      labels_tail)
+                                                      labels_tail.float())
 
             train_loss.backward()
 
