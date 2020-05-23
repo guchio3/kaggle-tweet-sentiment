@@ -869,7 +869,7 @@ class r002HeadTailRunner(Runner):
         model.train()
         running_loss = 0
 
-        softargmax1d = SoftArgmax1D(beta=1., device=self.device).to(self.device)
+        softargmax1d = SoftArgmax1D(beta=5., device=self.device).to(self.device)
 
         for batch_i, batch in enumerate(tqdm(loader)):
             if warmup_batch > 0:
