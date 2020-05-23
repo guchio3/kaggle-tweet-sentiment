@@ -402,7 +402,7 @@ class TSEHeadTailDatasetV3(TSEDataset):
 
         # this is test case
         if 'selected_text' not in row:
-            row['selected_text'] = ''
+            row['selected_text'] = row['text']
 
         tweet = " " + " ".join(row['text'].split())
         selected_text = " " + " ".join(row['selected_text'].split())
