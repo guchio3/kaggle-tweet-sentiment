@@ -14,7 +14,7 @@ from tqdm import tqdm
 import torch
 import torch.optim as optim
 from tools.datasets import (TSEHeadTailDataset, TSEHeadTailDatasetV2,
-                            TSEHeadTailDatasetV3,
+                            TSEHeadTailDatasetV3, TSEHeadTailDatasetV4,
                             TSEHeadTailSegmentationDataset,
                             TSEHeadTailSegmentationDatasetV3,
                             TSEHeadTailSegmentationDatasetV4,
@@ -221,12 +221,10 @@ class Runner(object):
                 self._warmup(current_epoch, self.cfg_train['warmup_epoch'],
                              model)
 
-                if isinstance(self.cfg_train['accum_mod'], int):
-                    accum_mod = self.cfg_train['accum_mod']
-                elif isinstance(self.cfg_train['accum_mod'], list):
-                    accum_mod = self.cfg_train['accum_mod'][current_epoch]
+                if current_epoch == 0:
+                    warmup_batch = self.cfg_train['warmup_batch']
                 else:
-                    raise NotImplementedError('accum_mod')
+                    warmup_batch = None
 
                 ema_model = copy.deepcopy(model)
                 ema_model.eval()
@@ -235,11 +233,18 @@ class Runner(object):
                           level=self.cfg_train['ema_level'],
                           n=self.cfg_train['ema_n'])
 
+                if isinstance(self.cfg_train['accum_mod'], int):
+                    accum_mod = self.cfg_train['accum_mod']
+                elif isinstance(self.cfg_train['accum_mod'], list):
+                    accum_mod = self.cfg_train['accum_mod'][current_epoch]
+                else:
+                    raise NotImplementedError('accum_mod')
+
                 use_special_mask = self.cfg_train['use_special_mask']
                 segmentation_loss_ratio = segmentation_loss_ratios[current_epoch]
 
                 trn_loss = self._train_loop(
-                    model, optimizer, fobj, trn_loader,
+                    model, optimizer, fobj, trn_loader, warmup_batch,
                     ema, accum_mod, use_special_mask,
                     fobj_segmentation, segmentation_loss_ratio)
                 ema.on_epoch_end(model)
@@ -481,6 +486,11 @@ class Runner(object):
                                            logger=self.logger,
                                            debug=self.debug,
                                            **self.cfg_dataset)
+        elif dataset_type == 'tse_headtail_dataset_v4':
+            dataset = TSEHeadTailDatasetV4(mode=mode, df=df,
+                                           logger=self.logger,
+                                           debug=self.debug,
+                                           **self.cfg_dataset)
         elif dataset_type == 'tse_headtail_segmentation_dataset':
             dataset = TSEHeadTailSegmentationDataset(mode=mode, df=df,
                                                      logger=self.logger,
@@ -518,7 +528,7 @@ class Runner(object):
         )
         return loader
 
-    def _warmup(self, current_epoch, warmup_epoch, model):
+    def _warmup(self, current_epoch, warmup_batch_or_epoch, model):
         if current_epoch == 0:
             module = model if self.device == 'cpu' else model.module
             for name, child in module.named_children():
@@ -530,7 +540,7 @@ class Runner(object):
                     self.logger.info(name + ' is frozen')
                     for param in child.parameters():
                         param.requires_grad = False
-        if current_epoch == warmup_epoch:
+        elif current_epoch == warmup_batch_or_epoch:
             self.logger.info("Turn on all the layers")
             for name, child in model.named_children():
                 for param in child.parameters():
@@ -847,12 +857,15 @@ class r002HeadTailRunner(Runner):
         return textIDs, predicted_texts
 
     def _train_loop(self, model, optimizer, fobj,
-                    loader, ema, accum_mod, use_specical_mask,
+                    loader, warmup_batch, ema, accum_mod, use_specical_mask,
                     fobj_segmentation, segmentation_loss_ratio):
         model.train()
         running_loss = 0
 
         for batch_i, batch in enumerate(tqdm(loader)):
+            if warmup_batch is not None:
+                self._warmup(batch_i, warmup_batch, model)
+
             input_ids = batch['input_ids'].to(self.device)
             labels_head = batch['labels_head'].to(self.device)
             labels_tail = batch['labels_tail'].to(self.device)
@@ -900,7 +913,9 @@ class r002HeadTailRunner(Runner):
                                           labels_segmentation,
                                           ignore=-1)
                 else:
-                    train_loss += segmentation_loss_ratio * \
+                    #NOTE: 
+                    # train_loss += segmentation_loss_ratio * \
+                    train_loss = segmentation_loss_ratio * \
                         fobj_segmentation(logits_segmentation,
                                           labels_segmentation)
 
@@ -1116,10 +1131,12 @@ class r002HeadTailRunner(Runner):
             text = ' ' + ' '.join(text.split())
             pred_label_head = y_pred_head.argmax()
             pred_label_tail = y_pred_tail.argmax()
-            # if pred_label_head > pred_label_tail:
-            #     predicted_text = text
-            # elif pred_label_head == pred_label_tail:
-            if pred_label_head >= pred_label_tail:
+            # NOTE: change here from kernel
+            if pred_label_head > pred_label_tail:
+                predicted_text = text
+                predicted_texts.append(predicted_text)
+                continue
+            elif pred_label_head == pred_label_tail:
                 if head_tail_equal_handle == 'nothing':
                     pass
                 elif head_tail_equal_handle == 'head':
@@ -1197,6 +1214,203 @@ class r002HeadTailRunner(Runner):
 
                 predicted_head = softmax(logits_head.data)
                 predicted_tail = softmax(logits_tail.data)
+
+                test_texts.append(test_text)
+                textIDs.append(textID)
+                test_input_ids.append(input_ids.cpu())
+                test_offsets.append(offsets.cpu())
+                test_sentiments.append(sentiment)
+                test_preds_head.append(predicted_head.cpu())
+                test_preds_tail.append(predicted_tail.cpu())
+
+            test_texts = list(chain.from_iterable(test_texts))
+            textIDs = list(chain.from_iterable(textIDs))
+            test_input_ids = torch.cat(test_input_ids)
+            test_offsets = torch.cat(test_offsets)
+            test_sentiments = list(chain.from_iterable(test_sentiments))
+            test_preds_head = torch.cat(test_preds_head)
+            test_preds_tail = torch.cat(test_preds_tail)
+
+        return textIDs, test_texts, test_input_ids, test_offsets, \
+            test_sentiments, test_preds_head, test_preds_tail
+
+
+class r003HeadTailSegmentRunner(r002HeadTailRunner):
+
+    def _valid_loop(self, model, fobj, loader, use_special_mask, use_offsets):
+        model.eval()
+        # softmax = Softmax(dim=1)
+        sigmoid = Sigmoid()
+        running_loss = 0
+
+        valid_textIDs_list = []
+        with torch.no_grad():
+            valid_texts = []
+            valid_textIDs = []
+            valid_input_ids = []
+            valid_offsets = []
+            valid_sentiments = []
+            valid_selected_texts = []
+            valid_preds_head, valid_preds_tail = [], []
+            valid_labels_head, valid_labels_tail = [], []
+            for batch in tqdm(loader):
+                textIDs = batch['textID']
+                valid_text = batch['text']
+                input_ids = batch['input_ids'].to(self.device)
+                if use_offsets:
+                    valid_offset = batch['offsets'].to(self.device)
+                valid_sentiment = batch['sentiment']
+                selected_texts = batch['selected_text']
+                labels_head = batch['labels_head'].to(self.device)
+                labels_tail = batch['labels_tail'].to(self.device)
+                attention_mask = batch['attention_mask'].to(self.device)
+                special_tokens_mask = batch['special_tokens_mask'].to(self.device) \
+                    if use_special_mask else None
+
+                (logits, ) = model(
+                    input_ids=input_ids,
+                    attention_mask=attention_mask,
+                    special_tokens_mask=special_tokens_mask,
+                )
+                logits_head = logits[0]
+                logits_tail = logits[1]
+
+                valid_loss = fobj(logits_head, labels_head)
+                valid_loss += fobj(logits_tail, labels_tail)
+                running_loss += valid_loss.item()
+
+                # _, predicted = torch.max(outputs.data, 1)
+                predicted_head = sigmoid(logits_head.data)
+                predicted_tail = sigmoid(logits_tail.data)
+
+                valid_textIDs_list.append(textIDs)
+                valid_texts.append(valid_text)
+                valid_input_ids.append(input_ids.cpu())
+                if use_offsets:
+                    valid_offsets.append(valid_offset.cpu())
+                valid_sentiments.append(valid_sentiment)
+                valid_selected_texts.append(selected_texts)
+                valid_preds_head.append(predicted_head.cpu())
+                valid_preds_tail.append(predicted_tail.cpu())
+                valid_labels_head.append(labels_head.cpu())
+                valid_labels_tail.append(labels_tail.cpu())
+
+            valid_loss = running_loss / len(loader)
+
+            valid_textIDs = list(
+                itertools.chain.from_iterable(valid_textIDs_list))
+            valid_texts = list(itertools.chain.from_iterable(valid_texts))
+            valid_input_ids = torch.cat(valid_input_ids)
+            if use_offsets:
+                valid_offsets = torch.cat(valid_offsets)
+            valid_sentiments = list(
+                itertools.chain.from_iterable(valid_sentiments))
+            valid_selected_texts = list(
+                itertools.chain.from_iterable(valid_selected_texts))
+            valid_preds_head = torch.cat(valid_preds_head)
+            valid_preds_tail = torch.cat(valid_preds_tail)
+            valid_labels_head = torch.cat(valid_labels_head)
+            valid_labels_tail = torch.cat(valid_labels_tail)
+
+            if use_offsets:
+                best_thresh, best_jaccard = \
+                    self._calc_jaccard_offsets(valid_texts,
+                                               valid_offsets,
+                                               valid_sentiments,
+                                               valid_selected_texts,
+                                               valid_preds_head,
+                                               valid_preds_tail,
+                                               self.cfg_predict['neutral_origin'],
+                                               self.cfg_predict['head_tail_equal_handle'],
+                                               )
+            else:
+                best_thresh, best_jaccard = \
+                    self._calc_jaccard(valid_texts,
+                                       valid_input_ids,
+                                       valid_sentiments,
+                                       valid_selected_texts,
+                                       # valid_labels_head,
+                                       # valid_labels_tail,
+                                       valid_preds_head,
+                                       valid_preds_tail,
+                                       loader.dataset.tokenizer,
+                                       self.cfg_train['thresh_unit'],
+                                       self.cfg_predict['neutral_origin'],
+                                       self.cfg_predict['head_tail_equal_handle'],
+                                       )
+
+        valid_preds = (valid_preds_head, valid_preds_tail)
+        valid_labels = (valid_labels_head, valid_labels_tail)
+
+        return valid_loss, best_thresh, best_jaccard, valid_textIDs, \
+            valid_input_ids, valid_preds, valid_labels
+
+    def _get_predicted_texts(self, texts, input_ids, sentiments, y_preds_head,
+                             y_preds_tail, tokenizer,
+                             neutral_origin=False,
+                             head_tail_equal_handle='tail'):
+        predicted_texts = []
+        for text, input_id, sentiment, y_pred_head, y_pred_tail \
+                in zip(texts, input_ids, sentiments, y_preds_head, y_preds_tail):
+            if neutral_origin and sentiment == 'neutral':
+                predicted_texts.append(text)
+                continue
+            pred_label_head = (y_pred_head - torch.cat([y_pred_head[-1:], y_pred_head[:-1]])).argmax()
+            pred_label_tail = (y_pred_tail - torch.cat([y_pred_tail[-1:], y_pred_tail[:-1]])).argmax()
+            if pred_label_head > pred_label_tail or len(text.split()) < 2:
+                predicted_text = text
+            elif pred_label_head == pred_label_tail:
+                if head_tail_equal_handle == 'nothing':
+                    predicted_text = ''
+                elif head_tail_equal_handle == 'head':
+                    predicted_text = tokenizer.decode(
+                        input_id[pred_label_head:pred_label_tail + 1])
+                elif head_tail_equal_handle == 'tail':
+                    predicted_text = tokenizer.decode(
+                        input_id[pred_label_head - 1:pred_label_tail])
+                else:
+                    raise NotImplementedError()
+            else:
+                predicted_text = tokenizer.decode(
+                    input_id[pred_label_head:pred_label_tail])
+            predicted_texts.append(predicted_text)
+
+        return predicted_texts
+
+    def _test_loop(self, model, loader, use_special_mask, use_offsets):
+        model.eval()
+        sigmoid = Sigmoid()
+
+        with torch.no_grad():
+            textIDs = []
+            test_texts = []
+            test_input_ids = []
+            test_offsets = []
+            test_sentiments = []
+            test_preds_head = []
+            test_preds_tail = []
+
+            for batch in tqdm(loader):
+                textID = batch['textID']
+                test_text = batch['text']
+                input_ids = batch['input_ids'].to(self.device)
+                if use_offsets:
+                    offsets = batch['offsets'].to(self.device)
+                sentiment = batch['sentiment']
+                attention_mask = batch['attention_mask'].to(self.device)
+                special_tokens_mask = batch['special_tokens_mask'].to(self.device) \
+                    if use_special_mask else None
+
+                (logits, ) = model(
+                    input_ids=input_ids,
+                    attention_mask=attention_mask,
+                    special_tokens_mask=special_tokens_mask,
+                )
+                logits_head = logits[0]
+                logits_tail = logits[1]
+
+                predicted_head = sigmoid(logits_head.data)
+                predicted_tail = sigmoid(logits_tail.data)
 
                 test_texts.append(test_text)
                 textIDs.append(textID)

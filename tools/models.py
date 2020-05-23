@@ -15,19 +15,19 @@ class EMA(object):
         self.cnt = self.n
         self.shadow = {}
         for name, param in model.named_parameters():
-            if param.requires_grad:
+            if True or param.requires_grad:
                 self.shadow[name] = param.data
 
     def _update(self, model):
         for name, param in model.named_parameters():
-            if param.requires_grad:
+            if True or param.requires_grad:
                 new_average = (1 - self.mu) * param.data + \
                     self.mu * self.shadow[name]
                 self.shadow[name] = new_average.clone()
 
     def set_weights(self, ema_model):
         for name, param in ema_model.named_parameters():
-            if param.requires_grad:
+            if True or param.requires_grad:
                 param.data = self.shadow[name]
 
     def on_batch_end(self, model):
@@ -727,7 +727,13 @@ class RobertaModelWDualMultiClassClassifierAndCumsumSegmentationHead(
         prob_tail = self.softmax(logits_tail.double())
         cumsum_head = torch.cumsum(prob_head, dim=1)
         cumsum_tail = torch.cumsum(prob_tail, dim=1)
+        rev_prob_head = self.softmax(logits_head.double()).flip(dims=(1, ))
+        rev_prob_tail = self.softmax(logits_tail.double()).flip(dims=(1, ))
+        rev_cumsum_head = torch.cumsum(rev_prob_head, dim=1).flip(dims=(1, ))
+        rev_cumsum_tail = torch.cumsum(rev_prob_tail, dim=1).flip(dims=(1, ))
         cumsum_pred = self.relu(cumsum_head - cumsum_tail) + 1e-7
+        cumsum_pred += self.relu(rev_cumsum_tail - rev_cumsum_head) + 1e-7
+        cumsum_pred /= 2
 
         # special tokes を -inf で mask
         if special_tokens_mask is not None:

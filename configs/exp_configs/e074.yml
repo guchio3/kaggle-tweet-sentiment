@@ -1,4 +1,4 @@
-description: "e064 no offsets cumsum segmentation"
+description: "e073 offset"
 runner: r002
 SINGLE_FOLD: false
 split:
@@ -11,7 +11,7 @@ loader:
     trn_batch_size: 96
     tst_sampler_type: sequential
     tst_batch_size: 96
-    dataset_type: tse_headtail_segmentation_dataset_v4
+    dataset_type: tse_headtail_segmentation_dataset_v3
 dataset:
     tokenizer_type: roberta_bytelevel_bpe
     pretrained_model_name_or_path: ./inputs/datasets/
@@ -19,17 +19,16 @@ dataset:
     add_pair_prefix_space: false
     max_length: 125
 model:
-    model_type: roberta-headtail-cumsum-segmentation
+    model_type: roberta-headtail-segmentation
     pretrained_model_name_or_path: roberta-base
     num_output_units: 125
 fobj:
     fobj_type: ce
 fobj_segmentation:
-    fobj_type: bce_raw
+    fobj_type: lovasz
 optimizer:
     optim_type: adam
-    # lr: 0.0001 # 03
-    lr: 0.00005 # 03
+    lr: 0.00005
 scheduler:
     scheduler_type: every_step
     every_step_unit: 0.5
@@ -47,8 +46,13 @@ train:
         - 4
         - 8
         - 16
-    segmentation_loss_ratios: 1
+    segmentation_loss_ratios:
+        - 1
+        - 0.5
+        - 0.25
+        - 0.125
+        - 0.0625
 predict:
     neutral_origin: true
     head_tail_equal_handle: tail
-    use_offsets: false
+    use_offsets: true
