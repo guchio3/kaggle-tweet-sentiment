@@ -889,8 +889,8 @@ class r002HeadTailRunner(Runner):
             )
 
             # 5 is temerature
-            logits_head = logits[0] * 5
-            logits_tail = logits[1] * 5
+            logits_head = logits[0]
+            logits_tail = logits[1]
 
             train_loss = fobj(logits_head, labels_head)
             train_loss += fobj(logits_tail, labels_tail)
@@ -914,10 +914,14 @@ class r002HeadTailRunner(Runner):
             if fobj_index_diff:
                 pred_index_head = softargmax1d(logits_head)
                 pred_index_tail = softargmax1d(logits_tail)
-                pred_index_diff = pred_index_tail - pred_index_head
-                labels_index_diff = (labels_tail - labels_head).float()
-                train_loss += 0.001 * fobj_index_diff(pred_index_diff,
-                                                        labels_index_diff)
+                # pred_index_diff = pred_index_tail - pred_index_head
+                # labels_index_diff = (labels_tail - labels_head).float()
+                # train_loss += 0.001 * fobj_index_diff(pred_index_diff,
+                #                                       labels_index_diff)
+                train_loss += 0.001 * fobj_index_diff(pred_index_head,
+                                                      labels_head)
+                train_loss += 0.001 * fobj_index_diff(pred_index_tail,
+                                                      labels_tail)
 
             train_loss.backward()
 
