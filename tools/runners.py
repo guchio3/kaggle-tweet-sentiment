@@ -791,7 +791,7 @@ class Runner(object):
 
 
 class r002HeadTailRunner(Runner):
-    def predict(self, tst_filename, checkpoints, use_offsets):
+    def predict(self, tst_filename, checkpoints):
         fold_test_preds_heads, fold_test_preds_tails = [], []
         for checkpoint in checkpoints:
             # load and preprocess train.csv
@@ -1203,6 +1203,8 @@ class r002HeadTailRunner(Runner):
                 input_ids = batch['input_ids'].to(self.device)
                 if use_offsets:
                     offsets = batch['offsets'].to(self.device)
+                else:
+                    offsets = None
                 sentiment = batch['sentiment']
                 attention_mask = batch['attention_mask'].to(self.device)
                 special_tokens_mask = batch['special_tokens_mask'].to(self.device) \
