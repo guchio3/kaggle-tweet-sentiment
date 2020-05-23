@@ -858,7 +858,8 @@ class r002HeadTailRunner(Runner):
                 avg_test_preds_head,
                 avg_test_preds_tail,
                 tst_loader.dataset.tokenizer,
-                **self.cfg_predict,
+                self.cfg_predict['neutral_origin'],
+                self.cfg_predict['head_tail_equal_handle'],
             )
 
         return textIDs, predicted_texts
