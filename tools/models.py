@@ -741,7 +741,7 @@ class RobertaModelWDualMultiClassClassifierHeadV7(nn.Module):
         output = torch.transpose(output, 1, 2)
         output = self.dropout(output)
         logits_head = self.classifier_conv_head(output).squeeze()[:, :-1]
-        logits_tail = self.classifier_conv_tail(output.flip(dims=(2, ))).squeeze()[:, 0:].flip(dims=(1, ))
+        logits_tail = self.classifier_conv_tail(output.flip(dims=(2, ))).squeeze()[:, 1:].flip(dims=(1, ))
 
         # special tokes を -inf で mask
         if special_tokens_mask is not None:
