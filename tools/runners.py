@@ -30,6 +30,7 @@ from tools.models import (
     RobertaModelWDualMultiClassClassifierAndSegmentationHeadV4,
     RobertaModelWDualMultiClassClassifierAndSegmentationHeadV5,
     RobertaModelWDualMultiClassClassifierAndSegmentationHeadV6,
+    RobertaModelWDualMultiClassClassifierAndSegmentationHeadV7,
     RobertaModelWDualMultiClassClassifierHead,
     RobertaModelWDualMultiClassClassifierHeadV2,
     RobertaModelWDualMultiClassClassifierHeadV3,
@@ -410,6 +411,11 @@ class Runner(object):
             )
         elif model_type == 'roberta-headtail-segmentation-v6':
             model = RobertaModelWDualMultiClassClassifierAndSegmentationHeadV6(
+                num_output_units,
+                pretrained_model_name_or_path
+            )
+        elif model_type == 'roberta-headtail-segmentation-v7':
+            model = RobertaModelWDualMultiClassClassifierAndSegmentationHeadV7(
                 num_output_units,
                 pretrained_model_name_or_path
             )
@@ -1130,7 +1136,7 @@ class r002HeadTailRunner(Runner):
     def calc_best_se_indexes(self, _start_logits, _end_logits):
         best_logit = -1000
         best_idxs = None
-        for start_idx, start_logit in enumerate(_start_logits):
+        for start_idx, start_logit in enumerate(tqdm(_start_logits)):
             for end_idx, end_logit in enumerate(_end_logits[start_idx:]):
                 logit_sum = (start_logit + end_logit).item()
                 if logit_sum > best_logit:
