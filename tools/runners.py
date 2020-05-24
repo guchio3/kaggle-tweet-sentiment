@@ -926,8 +926,10 @@ class r002HeadTailRunner(Runner):
             logits_tail = logits[1]
 
             if loss_weight_type == 'sel_len_log':
-                sel_len_weight = 20. * (
-                    1. / (labels_tail - labels_head).float() / 10. + 1.).log()
+                # sel_len_weight = 20. * (
+                #     1. / (labels_tail - labels_head).float() / 10. + 1.).log()
+                sel_len_weight = 10. * (
+                    1. / (labels_tail - labels_head).float() + 1.).log()
                 train_losses_head = fobj(logits_head, labels_head)
                 train_loss = (train_losses_head * sel_len_weight).mean()
                 train_losses_tail = fobj(logits_tail, labels_tail)
