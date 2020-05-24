@@ -254,7 +254,7 @@ class RobertaModelWDualMultiClassClassifierHead(nn.Module):
                 tail_special_tokens_mask == 0, -inf)
 
         # add hidden states and attention if they are here
-        outputs = ((logits_head, logits_tail),) + outputs[2:]
+        outputs = ((logits_head, logits_tail),)
 
         return outputs  # logits, (hidden_states), (attentions)
 
@@ -679,6 +679,30 @@ class RobertaModelWDualMultiClassClassifierHeadV5(nn.Module):
         self.model.resize_token_embeddings(token_num)
 
 
+class RobertaModelWDualMultiClassClassifierHeadV6(
+        RobertaModelWDualMultiClassClassifierHead):
+    def __init__(self, num_labels, pretrained_model_name_or_path):
+        super().__init__(num_labels, pretrained_model_name_or_path)
+        self.classifier_regen_tail = nn.Linear(num_labels * 2, num_labels)
+
+    def forward(self, input_ids=None, attention_mask=None,
+                token_type_ids=None, position_ids=None, head_mask=None,
+                inputs_embeds=None, encoder_hidden_states=None,
+                encoder_attention_mask=None, special_tokens_mask=None):
+
+        outputs = super().forward(input_ids, attention_mask,
+                                  token_type_ids, position_ids, head_mask,
+                                  inputs_embeds, encoder_hidden_states,
+                                  encoder_attention_mask, special_tokens_mask)
+
+        # tail を head に依存させる
+        logits_head_tail = torch.cat(outputs[0], dim=-1)
+        logits_tail = self.classifier_regen_tail(logits_head_tail)
+        outputs[0][1] = logits_tail
+
+        return outputs  # logits, (hidden_states), (attentions)
+
+
 class RobertaModelWDualMultiClassClassifierAndSegmentationHeadV4(
         RobertaModelWDualMultiClassClassifierHeadV4):
     def __init__(self, num_labels, pretrained_model_name_or_path):
@@ -785,6 +809,34 @@ class RobertaModelWDualMultiClassClassifierAndSegmentationHeadV5(
         # add hidden states and attention if they are here
         outputs = ((logits_head, logits_tail,
                     logits_segmentation),)
+
+        return outputs  # logits, (hidden_states), (attentions)
+
+
+class RobertaModelWDualMultiClassClassifierAndSegmentationHeadV6(
+        RobertaModelWDualMultiClassClassifierAndSegmentationHead):
+    def __init__(self, num_labels, pretrained_model_name_or_path):
+        super().__init__(num_labels, pretrained_model_name_or_path)
+        self.relu = nn.ReLU()
+        self.dropout2 = nn.Dropout(0.5)
+        self.classifier_regen_tail = nn.Linear(num_labels * 2, num_labels)
+
+    def forward(self, input_ids=None, attention_mask=None,
+                token_type_ids=None, position_ids=None, head_mask=None,
+                inputs_embeds=None, encoder_hidden_states=None,
+                encoder_attention_mask=None, special_tokens_mask=None):
+
+        outputs = super().forward(input_ids, attention_mask,
+                                  token_type_ids, position_ids, head_mask,
+                                  inputs_embeds, encoder_hidden_states,
+                                  encoder_attention_mask, special_tokens_mask)
+
+        # tail を head に依存させる
+        logits_head_tail = torch.cat(outputs[0][0:2], dim=-1)
+        logits_head_tail = self.relu(logits_head_tail)
+        logits_head_tail = self.dropout2(logits_head_tail)
+        logits_tail = self.classifier_regen_tail(logits_head_tail)
+        outputs = ((outputs[0][0], logits_tail, outputs[0][2]), )
 
         return outputs  # logits, (hidden_states), (attentions)
 
