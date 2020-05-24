@@ -250,14 +250,15 @@ class Runner(object):
                     model, optimizer, fobj, trn_loader, warmup_batch,
                     ema, accum_mod, use_special_mask,
                     fobj_segmentation, segmentation_loss_ratio,
-                    fobj_index_diff)
+                    self.cfg_train['loss_weight_type'], fobj_index_diff)
                 ema.on_epoch_end(model)
                 ema.set_weights(ema_model)  # NOTE: model?
                 use_offsets = self.cfg_predict['use_offsets']
                 val_loss, best_thresh, best_jaccard, val_textIDs, \
                     val_input_ids, val_preds, val_labels = \
                     self._valid_loop(ema_model, fobj, val_loader,
-                                     use_special_mask, use_offsets)
+                                     use_special_mask, use_offsets,
+                                     self.cfg_train['loss_weight_type'])
                 epoch_best_jaccard = max(epoch_best_jaccard, best_jaccard)
 
                 self.logger.info(
@@ -333,6 +334,8 @@ class Runner(object):
             fobj = BCELoss(reduction='mean')
         elif fobj_type == 'ce':
             fobj = CrossEntropyLoss()
+        elif fobj_type == 'ce_noreduction':
+            fobj = CrossEntropyLoss(reduction='none')
         elif fobj_type == 'lovasz':
             fobj = lovasz_hinge
         elif fobj_type == 'mse':
@@ -892,7 +895,8 @@ class r002HeadTailRunner(Runner):
 
     def _train_loop(self, model, optimizer, fobj,
                     loader, warmup_batch, ema, accum_mod, use_specical_mask,
-                    fobj_segmentation, segmentation_loss_ratio, fobj_index_diff):
+                    fobj_segmentation, segmentation_loss_ratio,
+                    loss_weight_type, fobj_index_diff):
         model.train()
         running_loss = 0
 
@@ -921,8 +925,24 @@ class r002HeadTailRunner(Runner):
             logits_head = logits[0]
             logits_tail = logits[1]
 
-            train_loss = fobj(logits_head, labels_head)
-            train_loss += fobj(logits_tail, labels_tail)
+            if loss_weight_type == 'sel_len':
+                sel_len_weight = 1. * (
+                    1. / (labels_tail - labels_head).float())
+                train_losses_head = fobj(logits_head, labels_head)
+                train_loss = (train_losses_head * sel_len_weight).mean()
+                train_losses_tail = fobj(logits_tail, labels_tail)
+                train_loss += (train_losses_tail * sel_len_weight).mean()
+            elif loss_weight_type == 'sel_len_log':
+                sel_len_weight = 1. * (
+                    1. / (labels_tail - labels_head).float() / 10. + 2.71828).log()
+                    # 1. / (labels_tail - labels_head).float() + 2.71828).log()
+                train_losses_head = fobj(logits_head, labels_head)
+                train_loss = (train_losses_head * sel_len_weight).mean()
+                train_losses_tail = fobj(logits_tail, labels_tail)
+                train_loss += (train_losses_tail * sel_len_weight).mean()
+            else:
+                train_loss = fobj(logits_head, labels_head)
+                train_loss += fobj(logits_tail, labels_tail)
 
             if fobj_segmentation:
                 labels_segmentation = batch['labels_segmentation']\
@@ -946,7 +966,7 @@ class r002HeadTailRunner(Runner):
                 pred_index_diff = pred_index_tail - pred_index_head
                 labels_index_diff = (labels_tail - labels_head).float()
                 train_loss += 0.0003 * fobj_index_diff(pred_index_diff,
-                                                      labels_index_diff)
+                                                       labels_index_diff)
                 # train_loss += 0.003 * fobj_index_diff(pred_index_head,
                 #                                       labels_head.float())
                 # train_loss += 0.003 * fobj_index_diff(pred_index_tail,
@@ -966,7 +986,8 @@ class r002HeadTailRunner(Runner):
 
         return train_loss
 
-    def _valid_loop(self, model, fobj, loader, use_special_mask, use_offsets):
+    def _valid_loop(self, model, fobj, loader, use_special_mask,
+                    use_offsets, loss_weight_type):
         model.eval()
         softmax = Softmax(dim=1)
         running_loss = 0
@@ -1003,8 +1024,23 @@ class r002HeadTailRunner(Runner):
                 logits_head = logits[0]
                 logits_tail = logits[1]
 
-                valid_loss = fobj(logits_head, labels_head)
-                valid_loss += fobj(logits_tail, labels_tail)
+                if loss_weight_type == 'sel_len':
+                    sel_len_weight = 1. * (
+                        1. / (labels_tail - labels_head).float() + 1.)
+                    valid_losses_head = fobj(logits_head, labels_head)
+                    valid_loss = (valid_losses_head * sel_len_weight).mean()
+                    valid_losses_tail = fobj(logits_tail, labels_tail)
+                    valid_loss += (valid_losses_tail * sel_len_weight).mean()
+                elif loss_weight_type == 'sel_len_log':
+                    sel_len_weight = 1. * (
+                        1. / (labels_tail - labels_head).float() / 10. + 2.71828).log()
+                    valid_losses_head = fobj(logits_head, labels_head)
+                    valid_loss = (valid_losses_head * sel_len_weight).mean()
+                    valid_losses_tail = fobj(logits_tail, labels_tail)
+                    valid_loss += (valid_losses_tail * sel_len_weight).mean()
+                else:
+                    valid_loss = fobj(logits_head, labels_head)
+                    valid_loss += fobj(logits_tail, labels_tail)
                 running_loss += valid_loss.item()
 
                 # _, predicted = torch.max(outputs.data, 1)
