@@ -14,25 +14,32 @@ from tqdm import tqdm
 import torch
 import torch.optim as optim
 from tools.datasets import (TSEHeadTailDataset, TSEHeadTailDatasetV2,
-                            TSEHeadTailDatasetV3,
+                            TSEHeadTailDatasetV3, TSEHeadTailDatasetV4,
                             TSEHeadTailSegmentationDataset,
                             TSEHeadTailSegmentationDatasetV3,
+                            TSEHeadTailSegmentationDatasetV4,
                             TSESegmentationDataset)
 from tools.loggers import myLogger
 from tools.losses import lovasz_hinge
 from tools.metrics import jaccard
 from tools.models import (
     EMA, BertModelWBinaryMultiLabelClassifierHead,
-    BertModelWDualMultiClassClassifierHead,
+    BertModelWDualMultiClassClassifierHead, RobertaModelHeadClassAndAnchorHead,
+    RobertaModelWDualMultiClassClassifierAndCumsumSegmentationHead,
     RobertaModelWDualMultiClassClassifierAndSegmentationHead,
+    RobertaModelWDualMultiClassClassifierAndSegmentationHeadV4,
+    RobertaModelWDualMultiClassClassifierAndSegmentationHeadV5,
+    RobertaModelWDualMultiClassClassifierAndSegmentationHeadV6,
     RobertaModelWDualMultiClassClassifierHead,
     RobertaModelWDualMultiClassClassifierHeadV2,
     RobertaModelWDualMultiClassClassifierHeadV3,
     RobertaModelWDualMultiClassClassifierHeadV4,
-    RobertaModelWDualMultiClassClassifierHeadV5)
+    RobertaModelWDualMultiClassClassifierHeadV5,
+    RobertaModelWDualMultiClassClassifierHeadV6, SoftArgmax1D)
 from tools.schedulers import pass_scheduler
 from tools.splitters import mySplitter
-from torch.nn import BCEWithLogitsLoss, CrossEntropyLoss, Sigmoid, Softmax
+from torch.nn import (BCELoss, BCEWithLogitsLoss, CrossEntropyLoss, MSELoss,
+                      Sigmoid, Softmax)
 from torch.utils.data import DataLoader
 from torch.utils.data.sampler import RandomSampler, SequentialSampler
 
@@ -76,6 +83,7 @@ class Runner(object):
         self.cfg_loader = config['loader']
         self.cfg_dataset = config['dataset']
         self.cfg_fobj = config['fobj']
+        self.cfg_fobj_index_diff = config['fobj_index_diff']
         self.cfg_fobj_segmentation = config['fobj_segmentation']
         self.cfg_model = config['model']
         self.cfg_optimizer = config['optimizer']
@@ -165,6 +173,7 @@ class Runner(object):
             # get fobj
             fobj = self._get_fobj(**self.cfg_fobj)
             fobj_segmentation = self._get_fobj(**self.cfg_fobj_segmentation)
+            fobj_index_diff = self._get_fobj(**self.cfg_fobj_index_diff)
             if 'segmentation_loss_ratios' in self.cfg_train:
                 if isinstance(self.cfg_train['segmentation_loss_ratios'], int):
                     segmentation_loss_ratios = [self.cfg_train['segmentation_loss_ratios']] \
@@ -216,12 +225,7 @@ class Runner(object):
                 self._warmup(current_epoch, self.cfg_train['warmup_epoch'],
                              model)
 
-                if isinstance(self.cfg_train['accum_mod'], int):
-                    accum_mod = self.cfg_train['accum_mod']
-                elif isinstance(self.cfg_train['accum_mod'], list):
-                    accum_mod = self.cfg_train['accum_mod'][current_epoch]
-                else:
-                    raise NotImplementedError('accum_mod')
+                warmup_batch = self.cfg_train['warmup_batch']
 
                 ema_model = copy.deepcopy(model)
                 ema_model.eval()
@@ -230,13 +234,21 @@ class Runner(object):
                           level=self.cfg_train['ema_level'],
                           n=self.cfg_train['ema_n'])
 
+                if isinstance(self.cfg_train['accum_mod'], int):
+                    accum_mod = self.cfg_train['accum_mod']
+                elif isinstance(self.cfg_train['accum_mod'], list):
+                    accum_mod = self.cfg_train['accum_mod'][current_epoch]
+                else:
+                    raise NotImplementedError('accum_mod')
+
                 use_special_mask = self.cfg_train['use_special_mask']
                 segmentation_loss_ratio = segmentation_loss_ratios[current_epoch]
 
                 trn_loss = self._train_loop(
-                    model, optimizer, fobj, trn_loader,
+                    model, optimizer, fobj, trn_loader, warmup_batch,
                     ema, accum_mod, use_special_mask,
-                    fobj_segmentation, segmentation_loss_ratio)
+                    fobj_segmentation, segmentation_loss_ratio,
+                    fobj_index_diff)
                 ema.on_epoch_end(model)
                 ema.set_weights(ema_model)  # NOTE: model?
                 use_offsets = self.cfg_predict['use_offsets']
@@ -315,10 +327,14 @@ class Runner(object):
     def _get_fobj(self, fobj_type):
         if fobj_type == 'bce':
             fobj = BCEWithLogitsLoss()
+        elif fobj_type == 'bce_raw':
+            fobj = BCELoss(reduction='mean')
         elif fobj_type == 'ce':
             fobj = CrossEntropyLoss()
         elif fobj_type == 'lovasz':
             fobj = lovasz_hinge
+        elif fobj_type == 'mse':
+            fobj = MSELoss()
         elif fobj_type == 'nothing':
             fobj = None
         else:
@@ -362,8 +378,38 @@ class Runner(object):
                 num_output_units,
                 pretrained_model_name_or_path
             )
+        elif model_type == 'roberta-headtail-v6':
+            model = RobertaModelWDualMultiClassClassifierHeadV6(
+                num_output_units,
+                pretrained_model_name_or_path
+            )
+        elif model_type == 'roberta-head-anchor':
+            model = RobertaModelHeadClassAndAnchorHead(
+                num_output_units,
+                pretrained_model_name_or_path
+            )
         elif model_type == 'roberta-headtail-segmentation':
             model = RobertaModelWDualMultiClassClassifierAndSegmentationHead(
+                num_output_units,
+                pretrained_model_name_or_path
+            )
+        elif model_type == 'roberta-headtail-cumsum-segmentation':
+            model = RobertaModelWDualMultiClassClassifierAndCumsumSegmentationHead(
+                num_output_units,
+                pretrained_model_name_or_path
+            )
+        elif model_type == 'roberta-headtail-segmentation-v4':
+            model = RobertaModelWDualMultiClassClassifierAndSegmentationHeadV4(
+                num_output_units,
+                pretrained_model_name_or_path
+            )
+        elif model_type == 'roberta-headtail-segmentation-v5':
+            model = RobertaModelWDualMultiClassClassifierAndSegmentationHeadV5(
+                num_output_units,
+                pretrained_model_name_or_path
+            )
+        elif model_type == 'roberta-headtail-segmentation-v6':
+            model = RobertaModelWDualMultiClassClassifierAndSegmentationHeadV6(
                 num_output_units,
                 pretrained_model_name_or_path
             )
@@ -459,6 +505,11 @@ class Runner(object):
                                            logger=self.logger,
                                            debug=self.debug,
                                            **self.cfg_dataset)
+        elif dataset_type == 'tse_headtail_dataset_v4':
+            dataset = TSEHeadTailDatasetV4(mode=mode, df=df,
+                                           logger=self.logger,
+                                           debug=self.debug,
+                                           **self.cfg_dataset)
         elif dataset_type == 'tse_headtail_segmentation_dataset':
             dataset = TSEHeadTailSegmentationDataset(mode=mode, df=df,
                                                      logger=self.logger,
@@ -466,6 +517,11 @@ class Runner(object):
                                                      **self.cfg_dataset)
         elif dataset_type == 'tse_headtail_segmentation_dataset_v3':
             dataset = TSEHeadTailSegmentationDatasetV3(mode=mode, df=df,
+                                                       logger=self.logger,
+                                                       debug=self.debug,
+                                                       **self.cfg_dataset)
+        elif dataset_type == 'tse_headtail_segmentation_dataset_v4':
+            dataset = TSEHeadTailSegmentationDatasetV4(mode=mode, df=df,
                                                        logger=self.logger,
                                                        debug=self.debug,
                                                        **self.cfg_dataset)
@@ -491,7 +547,7 @@ class Runner(object):
         )
         return loader
 
-    def _warmup(self, current_epoch, warmup_epoch, model):
+    def _warmup(self, current_epoch, warmup_batch_or_epoch, model):
         if current_epoch == 0:
             module = model if self.device == 'cpu' else model.module
             for name, child in module.named_children():
@@ -503,7 +559,7 @@ class Runner(object):
                     self.logger.info(name + ' is frozen')
                     for param in child.parameters():
                         param.requires_grad = False
-        if current_epoch == warmup_epoch:
+        if current_epoch == warmup_batch_or_epoch:
             self.logger.info("Turn on all the layers")
             for name, child in model.named_children():
                 for param in child.parameters():
@@ -747,7 +803,7 @@ class Runner(object):
 
 
 class r002HeadTailRunner(Runner):
-    def predict(self, tst_filename, checkpoints, use_offsets):
+    def predict(self, tst_filename, checkpoints):
         fold_test_preds_heads, fold_test_preds_tails = [], []
         for checkpoint in checkpoints:
             # load and preprocess train.csv
@@ -805,6 +861,7 @@ class r002HeadTailRunner(Runner):
                 avg_test_preds_tail,
                 self.cfg_predict['neutral_origin'],
                 self.cfg_predict['head_tail_equal_handle'],
+                self.cfg_predict['pospro'],
             )
         else:
             predicted_texts = self._get_predicted_texts(
@@ -814,18 +871,27 @@ class r002HeadTailRunner(Runner):
                 avg_test_preds_head,
                 avg_test_preds_tail,
                 tst_loader.dataset.tokenizer,
-                **self.cfg_predict,
+                self.cfg_predict['neutral_origin'],
+                self.cfg_predict['head_tail_equal_handle'],
+                self.cfg_predict['pospro'],
             )
 
         return textIDs, predicted_texts
 
     def _train_loop(self, model, optimizer, fobj,
-                    loader, ema, accum_mod, use_specical_mask,
-                    fobj_segmentation, segmentation_loss_ratio):
+                    loader, warmup_batch, ema, accum_mod, use_specical_mask,
+                    fobj_segmentation, segmentation_loss_ratio, fobj_index_diff):
         model.train()
         running_loss = 0
 
+        softargmax1d = SoftArgmax1D(
+            beta=5., device=self.device).to(
+            self.device)
+
         for batch_i, batch in enumerate(tqdm(loader)):
+            if warmup_batch > 0:
+                self._warmup(batch_i, warmup_batch, model)
+
             input_ids = batch['input_ids'].to(self.device)
             labels_head = batch['labels_head'].to(self.device)
             labels_tail = batch['labels_tail'].to(self.device)
@@ -839,30 +905,12 @@ class r002HeadTailRunner(Runner):
                 special_tokens_mask=special_tokens_mask,
             )
 
+            # 5 is temerature
             logits_head = logits[0]
             logits_tail = logits[1]
 
-            temp_loss = fobj(logits_head, labels_head)
-            if temp_loss == float('inf'):
-                self.logger.warning(f'head loss is nan for {batch_i}')
-            else:
-                train_loss = temp_loss
-            temp_loss = fobj(logits_tail, labels_tail)
-            if temp_loss == float('inf'):
-                self.logger.warning(f'tail loss is nan for {batch_i}')
-                for i in range(len(input_ids)):
-                    if special_tokens_mask[i][labels_tail[i] - 1] == 1:
-                        print('--------------------------')
-                        print(batch['textID'][i])
-                        print(input_ids[i])
-                        print(labels_head[i])
-                        print(labels_tail[i])
-                        exit(0)
-            else:
-                train_loss += temp_loss
-            if train_loss == float('inf'):
-                from pudb import set_trace
-                set_trace()
+            train_loss = fobj(logits_head, labels_head)
+            train_loss += fobj(logits_tail, labels_tail)
 
             if fobj_segmentation:
                 labels_segmentation = batch['labels_segmentation']\
@@ -870,10 +918,27 @@ class r002HeadTailRunner(Runner):
                 logits_segmentation = logits[2]
                 # logits_segmentation *= attention_mask
 
-                train_loss += segmentation_loss_ratio * \
-                    fobj_segmentation(logits_segmentation,
-                                      labels_segmentation,
-                                      ignore=-1)
+                if self.cfg_fobj_segmentation['fobj_type'] == 'lovasz':
+                    train_loss += segmentation_loss_ratio * \
+                        fobj_segmentation(logits_segmentation,
+                                          labels_segmentation,
+                                          ignore=-1)
+                else:
+                    train_loss += segmentation_loss_ratio * \
+                        fobj_segmentation(logits_segmentation,
+                                          labels_segmentation)
+
+            if fobj_index_diff:
+                pred_index_head = softargmax1d(logits_head)
+                pred_index_tail = softargmax1d(logits_tail)
+                pred_index_diff = pred_index_tail - pred_index_head
+                labels_index_diff = (labels_tail - labels_head).float()
+                train_loss += 0.001 * fobj_index_diff(pred_index_diff,
+                                                      labels_index_diff)
+                # train_loss += 0.003 * fobj_index_diff(pred_index_head,
+                #                                       labels_head.float())
+                # train_loss += 0.003 * fobj_index_diff(pred_index_tail,
+                #                                       labels_tail.float())
 
             train_loss.backward()
 
@@ -973,6 +1038,7 @@ class r002HeadTailRunner(Runner):
                                                valid_preds_tail,
                                                self.cfg_predict['neutral_origin'],
                                                self.cfg_predict['head_tail_equal_handle'],
+                                               self.cfg_predict['pospro'],
                                                )
             else:
                 best_thresh, best_jaccard = \
@@ -988,6 +1054,7 @@ class r002HeadTailRunner(Runner):
                                        self.cfg_train['thresh_unit'],
                                        self.cfg_predict['neutral_origin'],
                                        self.cfg_predict['head_tail_equal_handle'],
+                                       self.cfg_predict['pospro'],
                                        )
 
         valid_preds = (valid_preds_head, valid_preds_tail)
@@ -1019,15 +1086,20 @@ class r002HeadTailRunner(Runner):
     def _get_predicted_texts(self, texts, input_ids, sentiments, y_preds_head,
                              y_preds_tail, tokenizer,
                              neutral_origin=False,
-                             head_tail_equal_handle='tail'):
+                             head_tail_equal_handle='tail',
+                             pospro={}):
         predicted_texts = []
         for text, input_id, sentiment, y_pred_head, y_pred_tail \
                 in zip(texts, input_ids, sentiments, y_preds_head, y_preds_tail):
             if neutral_origin and sentiment == 'neutral':
                 predicted_texts.append(text)
                 continue
-            pred_label_head = y_pred_head.argmax()
-            pred_label_tail = y_pred_tail.argmax()
+            if pospro['head_tail_1']:
+                pred_label_head, pred_label_tail = self.calc_best_se_indexes(
+                    y_pred_head, y_pred_tail)
+            else:
+                pred_label_head = y_pred_head.argmax()
+                pred_label_tail = y_pred_tail.argmax()
             if pred_label_head > pred_label_tail or len(text.split()) < 2:
                 predicted_text = text
             elif pred_label_head == pred_label_tail:
@@ -1044,13 +1116,32 @@ class r002HeadTailRunner(Runner):
             else:
                 predicted_text = tokenizer.decode(
                     input_id[pred_label_head:pred_label_tail])
+
+            if pospro['req_shorten']:
+                if len(predicted_text.split()) == 1:
+                    predicted_text = predicted_text.replace('!!!!', '!')
+                    predicted_text = predicted_text.replace('..', '.')
+                    predicted_text = predicted_text.replace('...', '.')
+
             predicted_texts.append(predicted_text)
 
         return predicted_texts
 
+    def calc_best_se_indexes(self, _start_logits, _end_logits):
+        best_logit = -1000
+        best_idxs = None
+        for start_idx, start_logit in enumerate(_start_logits):
+            for end_idx, end_logit in enumerate(_end_logits[start_idx:]):
+                logit_sum = (start_logit + end_logit).item()
+                if logit_sum > best_logit:
+                    best_logit = logit_sum
+                    best_idxs = (start_idx, start_idx + end_idx)
+        return best_idxs
+
     def _calc_jaccard(self, texts, input_ids, sentiments, selected_texts,
                       y_preds_head, y_preds_tail, tokenizer, thresh_unit,
-                      neutral_origin=False, head_tail_equal_handle='tail'):
+                      neutral_origin=False, head_tail_equal_handle='tail',
+                      pospro={}):
 
         temp_jaccard = 0
         predicted_texts = self._get_predicted_texts(
@@ -1062,6 +1153,7 @@ class r002HeadTailRunner(Runner):
             tokenizer,
             neutral_origin,
             head_tail_equal_handle,
+            pospro,
         )
         for selected_text, predicted_text in zip(
                 selected_texts, predicted_texts):
@@ -1087,10 +1179,12 @@ class r002HeadTailRunner(Runner):
             text = ' ' + ' '.join(text.split())
             pred_label_head = y_pred_head.argmax()
             pred_label_tail = y_pred_tail.argmax()
-            # if pred_label_head > pred_label_tail:
-            #     predicted_text = text
-            # elif pred_label_head == pred_label_tail:
-            if pred_label_head >= pred_label_tail:
+            # NOTE: change here from kernel
+            if pred_label_head > pred_label_tail:
+                predicted_text = text
+                predicted_texts.append(predicted_text)
+                continue
+            elif pred_label_head == pred_label_tail:
                 if head_tail_equal_handle == 'nothing':
                     pass
                 elif head_tail_equal_handle == 'head':
@@ -1153,6 +1247,8 @@ class r002HeadTailRunner(Runner):
                 input_ids = batch['input_ids'].to(self.device)
                 if use_offsets:
                     offsets = batch['offsets'].to(self.device)
+                else:
+                    offsets = None
                 sentiment = batch['sentiment']
                 attention_mask = batch['attention_mask'].to(self.device)
                 special_tokens_mask = batch['special_tokens_mask'].to(self.device) \
@@ -1172,7 +1268,8 @@ class r002HeadTailRunner(Runner):
                 test_texts.append(test_text)
                 textIDs.append(textID)
                 test_input_ids.append(input_ids.cpu())
-                test_offsets.append(offsets.cpu())
+                if use_offsets:
+                    test_offsets.append(offsets.cpu())
                 test_sentiments.append(sentiment)
                 test_preds_head.append(predicted_head.cpu())
                 test_preds_tail.append(predicted_tail.cpu())
@@ -1180,10 +1277,424 @@ class r002HeadTailRunner(Runner):
             test_texts = list(chain.from_iterable(test_texts))
             textIDs = list(chain.from_iterable(textIDs))
             test_input_ids = torch.cat(test_input_ids)
-            test_offsets = torch.cat(test_offsets)
+            if use_offsets:
+                test_offsets = torch.cat(test_offsets)
             test_sentiments = list(chain.from_iterable(test_sentiments))
             test_preds_head = torch.cat(test_preds_head)
             test_preds_tail = torch.cat(test_preds_tail)
 
         return textIDs, test_texts, test_input_ids, test_offsets, \
             test_sentiments, test_preds_head, test_preds_tail
+
+
+# class r003HeadTailSegmentRunner(r002HeadTailRunner):
+#
+#     def _valid_loop(self, model, fobj, loader, use_special_mask, use_offsets):
+#         model.eval()
+#         # softmax = Softmax(dim=1)
+#         sigmoid = Sigmoid()
+#         running_loss = 0
+#
+#         valid_textIDs_list = []
+#         with torch.no_grad():
+#             valid_texts = []
+#             valid_textIDs = []
+#             valid_input_ids = []
+#             valid_offsets = []
+#             valid_sentiments = []
+#             valid_selected_texts = []
+#             valid_preds_head, valid_preds_tail = [], []
+#             valid_labels_head, valid_labels_tail = [], []
+#             for batch in tqdm(loader):
+#                 textIDs = batch['textID']
+#                 valid_text = batch['text']
+#                 input_ids = batch['input_ids'].to(self.device)
+#                 if use_offsets:
+#                     valid_offset = batch['offsets'].to(self.device)
+#                 valid_sentiment = batch['sentiment']
+#                 selected_texts = batch['selected_text']
+#                 labels_head = batch['labels_head'].to(self.device)
+#                 labels_tail = batch['labels_tail'].to(self.device)
+#                 attention_mask = batch['attention_mask'].to(self.device)
+#                 special_tokens_mask = batch['special_tokens_mask'].to(self.device) \
+#                     if use_special_mask else None
+#
+#                 (logits, ) = model(
+#                     input_ids=input_ids,
+#                     attention_mask=attention_mask,
+#                     special_tokens_mask=special_tokens_mask,
+#                 )
+#                 logits_head = logits[0]
+#                 logits_tail = logits[1]
+#
+#                 valid_loss = fobj(logits_head, labels_head)
+#                 valid_loss += fobj(logits_tail, labels_tail)
+#                 running_loss += valid_loss.item()
+#
+#                 # _, predicted = torch.max(outputs.data, 1)
+#                 predicted_head = sigmoid(logits_head.data)
+#                 predicted_tail = sigmoid(logits_tail.data)
+#
+#                 valid_textIDs_list.append(textIDs)
+#                 valid_texts.append(valid_text)
+#                 valid_input_ids.append(input_ids.cpu())
+#                 if use_offsets:
+#                     valid_offsets.append(valid_offset.cpu())
+#                 valid_sentiments.append(valid_sentiment)
+#                 valid_selected_texts.append(selected_texts)
+#                 valid_preds_head.append(predicted_head.cpu())
+#                 valid_preds_tail.append(predicted_tail.cpu())
+#                 valid_labels_head.append(labels_head.cpu())
+#                 valid_labels_tail.append(labels_tail.cpu())
+#
+#             valid_loss = running_loss / len(loader)
+#
+#             valid_textIDs = list(
+#                 itertools.chain.from_iterable(valid_textIDs_list))
+#             valid_texts = list(itertools.chain.from_iterable(valid_texts))
+#             valid_input_ids = torch.cat(valid_input_ids)
+#             if use_offsets:
+#                 valid_offsets = torch.cat(valid_offsets)
+#             valid_sentiments = list(
+#                 itertools.chain.from_iterable(valid_sentiments))
+#             valid_selected_texts = list(
+#                 itertools.chain.from_iterable(valid_selected_texts))
+#             valid_preds_head = torch.cat(valid_preds_head)
+#             valid_preds_tail = torch.cat(valid_preds_tail)
+#             valid_labels_head = torch.cat(valid_labels_head)
+#             valid_labels_tail = torch.cat(valid_labels_tail)
+#
+#             if use_offsets:
+#                 best_thresh, best_jaccard = \
+#                     self._calc_jaccard_offsets(valid_texts,
+#                                                valid_offsets,
+#                                                valid_sentiments,
+#                                                valid_selected_texts,
+#                                                valid_preds_head,
+#                                                valid_preds_tail,
+#                                                self.cfg_predict['neutral_origin'],
+#                                                self.cfg_predict['head_tail_equal_handle'],
+#                                                )
+#             else:
+#                 best_thresh, best_jaccard = \
+#                     self._calc_jaccard(valid_texts,
+#                                        valid_input_ids,
+#                                        valid_sentiments,
+#                                        valid_selected_texts,
+#                                        # valid_labels_head,
+#                                        # valid_labels_tail,
+#                                        valid_preds_head,
+#                                        valid_preds_tail,
+#                                        loader.dataset.tokenizer,
+#                                        self.cfg_train['thresh_unit'],
+#                                        self.cfg_predict['neutral_origin'],
+#                                        self.cfg_predict['head_tail_equal_handle'],
+#                                        )
+#
+#         valid_preds = (valid_preds_head, valid_preds_tail)
+#         valid_labels = (valid_labels_head, valid_labels_tail)
+#
+#         return valid_loss, best_thresh, best_jaccard, valid_textIDs, \
+#             valid_input_ids, valid_preds, valid_labels
+#
+#     def _get_predicted_texts(self, texts, input_ids, sentiments, y_preds_head,
+#                              y_preds_tail, tokenizer,
+#                              neutral_origin=False,
+#                              head_tail_equal_handle='tail'):
+#         predicted_texts = []
+#         for text, input_id, sentiment, y_pred_head, y_pred_tail \
+#                 in zip(texts, input_ids, sentiments, y_preds_head, y_preds_tail):
+#             if neutral_origin and sentiment == 'neutral':
+#                 predicted_texts.append(text)
+#                 continue
+#             pred_label_head = (
+#                 y_pred_head - torch.cat([y_pred_head[-1:], y_pred_head[:-1]])).argmax()
+#             pred_label_tail = (
+#                 y_pred_tail - torch.cat([y_pred_tail[-1:], y_pred_tail[:-1]])).argmax()
+#             if pred_label_head > pred_label_tail or len(text.split()) < 2:
+#                 predicted_text = text
+#             elif pred_label_head == pred_label_tail:
+#                 if head_tail_equal_handle == 'nothing':
+#                     predicted_text = ''
+#                 elif head_tail_equal_handle == 'head':
+#                     predicted_text = tokenizer.decode(
+#                         input_id[pred_label_head:pred_label_tail + 1])
+#                 elif head_tail_equal_handle == 'tail':
+#                     predicted_text = tokenizer.decode(
+#                         input_id[pred_label_head - 1:pred_label_tail])
+#                 else:
+#                     raise NotImplementedError()
+#             else:
+#                 predicted_text = tokenizer.decode(
+#                     input_id[pred_label_head:pred_label_tail])
+#             predicted_texts.append(predicted_text)
+#
+#         return predicted_texts
+#
+#     def _test_loop(self, model, loader, use_special_mask, use_offsets):
+#         model.eval()
+#         sigmoid = Sigmoid()
+#
+#         with torch.no_grad():
+#             textIDs = []
+#             test_texts = []
+#             test_input_ids = []
+#             test_offsets = []
+#             test_sentiments = []
+#             test_preds_head = []
+#             test_preds_tail = []
+#
+#             for batch in tqdm(loader):
+#                 textID = batch['textID']
+#                 test_text = batch['text']
+#                 input_ids = batch['input_ids'].to(self.device)
+#                 if use_offsets:
+#                     offsets = batch['offsets'].to(self.device)
+#                 sentiment = batch['sentiment']
+#                 attention_mask = batch['attention_mask'].to(self.device)
+#                 special_tokens_mask = batch['special_tokens_mask'].to(self.device) \
+#                     if use_special_mask else None
+#
+#                 (logits, ) = model(
+#                     input_ids=input_ids,
+#                     attention_mask=attention_mask,
+#                     special_tokens_mask=special_tokens_mask,
+#                 )
+#                 logits_head = logits[0]
+#                 logits_tail = logits[1]
+#
+#                 predicted_head = sigmoid(logits_head.data)
+#                 predicted_tail = sigmoid(logits_tail.data)
+#
+#                 test_texts.append(test_text)
+#                 textIDs.append(textID)
+#                 test_input_ids.append(input_ids.cpu())
+#                 if use_offsets:
+#                     test_offsets.append(offsets.cpu())
+#                 test_sentiments.append(sentiment)
+#                 test_preds_head.append(predicted_head.cpu())
+#                 test_preds_tail.append(predicted_tail.cpu())
+#
+#             test_texts = list(chain.from_iterable(test_texts))
+#             textIDs = list(chain.from_iterable(textIDs))
+#             test_input_ids = torch.cat(test_input_ids)
+#             if use_offsets:
+#                 test_offsets = torch.cat(test_offsets)
+#             test_sentiments = list(chain.from_iterable(test_sentiments))
+#             test_preds_head = torch.cat(test_preds_head)
+#             test_preds_tail = torch.cat(test_preds_tail)
+#
+#         return textIDs, test_texts, test_input_ids, test_offsets, \
+#             test_sentiments, test_preds_head, test_preds_tail
+#
+#
+# class r004HeadAnchorRunner(r002HeadTailRunner):
+#
+#     def _train_loop(self, model, optimizer, fobj,
+#                     loader, warmup_batch, ema, accum_mod, use_specical_mask,
+#                     fobj_segmentation, segmentation_loss_ratio):
+#         model.train()
+#         running_loss = 0
+#
+#         fobj_anchor = MSELoss()
+#
+#         for batch_i, batch in enumerate(tqdm(loader)):
+#             if warmup_batch is not None:
+#                 self._warmup(batch_i, warmup_batch, model)
+#
+#             input_ids = batch['input_ids'].to(self.device)
+#             labels_head = batch['labels_head'].to(self.device)
+#             labels_tail = batch['labels_tail'].to(self.device)
+#             attention_mask = batch['attention_mask'].to(self.device)
+#             special_tokens_mask = batch['special_tokens_mask'].to(self.device) \
+#                 if use_specical_mask else None
+#
+#             (logits, ) = model(
+#                 input_ids=input_ids,
+#                 attention_mask=attention_mask,
+#                 special_tokens_mask=special_tokens_mask,
+#             )
+#
+#             logits_head = logits[0]
+#             logits_tail = logits[1]
+#
+#             train_loss = fobj(logits_head, labels_head)
+#             train_loss += fobj_anchor(logits_tail,
+#                                       (labels_tail - labels_head).float())
+#
+#             if fobj_segmentation:
+#                 labels_segmentation = batch['labels_segmentation']\
+#                     .to(self.device)
+#                 logits_segmentation = logits[2]
+#                 # logits_segmentation *= attention_mask
+#
+#                 if self.cfg_fobj_segmentation['fobj_type'] == 'lovasz':
+#                     train_loss += segmentation_loss_ratio * \
+#                         fobj_segmentation(logits_segmentation,
+#                                           labels_segmentation,
+#                                           ignore=-1)
+#                 else:
+#                     # NOTE:
+#                     # train_loss += segmentation_loss_ratio * \
+#                     train_loss = segmentation_loss_ratio * \
+#                         fobj_segmentation(logits_segmentation,
+#                                           labels_segmentation)
+#
+#             train_loss.backward()
+#
+#             running_loss += train_loss.item()
+#
+#             if (batch_i + 1) % accum_mod == 0:
+#                 optimizer.step()
+#                 optimizer.zero_grad()
+#
+#                 ema.on_batch_end(model)
+#
+#         train_loss = running_loss / len(loader)
+#
+#         return train_loss
+#
+#     def _valid_loop(self, model, fobj, loader, use_special_mask, use_offsets):
+#         model.eval()
+#         softmax = Softmax(dim=1)
+#         running_loss = 0
+#
+#         fobj_anchor = MSELoss()
+#
+#         valid_textIDs_list = []
+#         with torch.no_grad():
+#             valid_texts = []
+#             valid_textIDs = []
+#             valid_input_ids = []
+#             valid_offsets = []
+#             valid_sentiments = []
+#             valid_selected_texts = []
+#             valid_preds_head, valid_preds_tail = [], []
+#             valid_labels_head, valid_labels_tail = [], []
+#             for batch in tqdm(loader):
+#                 textIDs = batch['textID']
+#                 valid_text = batch['text']
+#                 input_ids = batch['input_ids'].to(self.device)
+#                 if use_offsets:
+#                     valid_offset = batch['offsets'].to(self.device)
+#                 valid_sentiment = batch['sentiment']
+#                 selected_texts = batch['selected_text']
+#                 labels_head = batch['labels_head'].to(self.device)
+#                 labels_tail = batch['labels_tail'].to(self.device)
+#                 attention_mask = batch['attention_mask'].to(self.device)
+#                 special_tokens_mask = batch['special_tokens_mask'].to(self.device) \
+#                     if use_special_mask else None
+#
+#                 (logits, ) = model(
+#                     input_ids=input_ids,
+#                     attention_mask=attention_mask,
+#                     special_tokens_mask=special_tokens_mask,
+#                 )
+#                 logits_head = logits[0]
+#                 logits_tail = logits[1]
+#
+#                 valid_loss = fobj(logits_head, labels_head)
+#                 valid_loss += fobj_anchor(logits_tail,
+#                                           labels_tail - labels_head)
+#                 running_loss += valid_loss.item()
+#
+#                 # _, predicted = torch.max(outputs.data, 1)
+#                 predicted_head = softmax(logits_head.data)
+#                 predicted_tail = logits_tail.data
+#
+#                 valid_textIDs_list.append(textIDs)
+#                 valid_texts.append(valid_text)
+#                 valid_input_ids.append(input_ids.cpu())
+#                 if use_offsets:
+#                     valid_offsets.append(valid_offset.cpu())
+#                 valid_sentiments.append(valid_sentiment)
+#                 valid_selected_texts.append(selected_texts)
+#                 valid_preds_head.append(predicted_head.cpu())
+#                 valid_preds_tail.append(predicted_tail.cpu())
+#                 valid_labels_head.append(labels_head.cpu())
+#                 valid_labels_tail.append(labels_tail.cpu())
+#
+#             valid_loss = running_loss / len(loader)
+#
+#             valid_textIDs = list(
+#                 itertools.chain.from_iterable(valid_textIDs_list))
+#             valid_texts = list(itertools.chain.from_iterable(valid_texts))
+#             valid_input_ids = torch.cat(valid_input_ids)
+#             if use_offsets:
+#                 valid_offsets = torch.cat(valid_offsets)
+#             valid_sentiments = list(
+#                 itertools.chain.from_iterable(valid_sentiments))
+#             valid_selected_texts = list(
+#                 itertools.chain.from_iterable(valid_selected_texts))
+#             valid_preds_head = torch.cat(valid_preds_head)
+#             valid_preds_tail = torch.cat(valid_preds_tail)
+#             valid_labels_head = torch.cat(valid_labels_head)
+#             valid_labels_tail = torch.cat(valid_labels_tail)
+#
+#             if use_offsets:
+#                 best_thresh, best_jaccard = \
+#                     self._calc_jaccard_offsets(valid_texts,
+#                                                valid_offsets,
+#                                                valid_sentiments,
+#                                                valid_selected_texts,
+#                                                valid_preds_head,
+#                                                valid_preds_tail,
+#                                                self.cfg_predict['neutral_origin'],
+#                                                self.cfg_predict['head_tail_equal_handle'],
+#                                                )
+#             else:
+#                 best_thresh, best_jaccard = \
+#                     self._calc_jaccard(valid_texts,
+#                                        valid_input_ids,
+#                                        valid_sentiments,
+#                                        valid_selected_texts,
+#                                        # valid_labels_head,
+#                                        # valid_labels_tail,
+#                                        valid_preds_head,
+#                                        valid_preds_tail,
+#                                        loader.dataset.tokenizer,
+#                                        self.cfg_train['thresh_unit'],
+#                                        self.cfg_predict['neutral_origin'],
+#                                        self.cfg_predict['head_tail_equal_handle'],
+#                                        )
+#
+#         valid_preds = (valid_preds_head, valid_preds_tail)
+#         valid_labels = (valid_labels_head, valid_labels_tail)
+#
+#         return valid_loss, best_thresh, best_jaccard, valid_textIDs, \
+#             valid_input_ids, valid_preds, valid_labels
+#
+#     def _get_predicted_texts(self, texts, input_ids, sentiments, y_preds_head,
+#                              y_preds_tail, tokenizer,
+#                              neutral_origin=False,
+#                              head_tail_equal_handle='tail'):
+#         predicted_texts = []
+#         for text, input_id, sentiment, y_pred_head, y_pred_tail \
+#                 in zip(texts, input_ids, sentiments, y_preds_head, y_preds_tail):
+#             if neutral_origin and sentiment == 'neutral':
+#                 predicted_texts.append(text)
+#                 continue
+#             pred_label_head = y_pred_head.argmax()
+#             pred_label_tail = (
+#                 pred_label_head +
+#                 y_pred_tail).round()[0].long()   # 四捨五入
+#             if pred_label_head > pred_label_tail or len(text.split()) < 2 \
+#                     or pred_label_tail >= len(input_ids):
+#                 predicted_text = text
+#             elif pred_label_head == pred_label_tail:
+#                 if head_tail_equal_handle == 'nothing':
+#                     predicted_text = ''
+#                 elif head_tail_equal_handle == 'head':
+#                     predicted_text = tokenizer.decode(
+#                         input_id[pred_label_head:pred_label_tail + 1])
+#                 elif head_tail_equal_handle == 'tail':
+#                     predicted_text = tokenizer.decode(
+#                         input_id[pred_label_head - 1:pred_label_tail])
+#                 else:
+#                     raise NotImplementedError()
+#             else:
+#                 predicted_text = tokenizer.decode(
+#                     input_id[pred_label_head:pred_label_tail])
+#             predicted_texts.append(predicted_text)
+#
+#         return predicted_texts

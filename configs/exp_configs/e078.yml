@@ -1,19 +1,17 @@
-description: "default config"
+description: "e073 soft index diff loss"
 runner: r002
 SINGLE_FOLD: false
 split:
-    split_type: skf
+    split_type: abhishek5
     split_num: 5
     shuffle: true
     random_state: 71
-    abhishek5: ./inputs/datasets/abhishek_folds/train_folds.csv
-    abhishek8: ./inputs/datasets/abhishek_folds/train_8folds.csv
 loader:
     trn_sampler_type: random
     trn_batch_size: 96
     tst_sampler_type: sequential
     tst_batch_size: 96
-    dataset_type: tse_headtail_dataset
+    dataset_type: tse_headtail_segmentation_dataset_v3
 dataset:
     tokenizer_type: roberta_bytelevel_bpe
     pretrained_model_name_or_path: ./inputs/datasets/
@@ -21,45 +19,42 @@ dataset:
     add_pair_prefix_space: false
     max_length: 125
 model:
-    model_type: roberta-headtail
+    model_type: roberta-headtail-segmentation
     pretrained_model_name_or_path: roberta-base
     num_output_units: 125
 fobj:
     fobj_type: ce
 fobj_index_diff:
-    fobj_type: nothing
+    fobj_type: mse
 fobj_segmentation:
-    fobj_type: nothing
+    fobj_type: lovasz
 optimizer:
     optim_type: adam
-    lr: 0.00003
+    lr: 0.00005
 scheduler:
-    scheduler_type: cosine
-    every_step_unit: 0.2
-    cosine_eta_min: 0.000001
-    multistep_milestones:
-        - 1
-        - 3
-    multistep_gamma: 0.2
+    scheduler_type: every_step
+    every_step_unit: 0.5
 train:
     max_epoch: 5
-    warmup_epoch: 1
+    warmup_epoch: 0
     thresh_unit: 0.05  # no meaning for head tail
     rm_neutral: false
-    warmup_batch: 0
     ema_mu: 0.9
     ema_level: batch
-    ema_n: 0  # < 1 means no ema
-    accum_mod: 1
-    use_special_mask: false
-    use_offsets: false
-    segmentation_loss_ratios: 1
+    ema_n: 1  # < 1 means no ema
+    accum_mod:
+        - 1
+        - 2
+        - 4
+        - 8
+        - 16
+    segmentation_loss_ratios:
+        - 1
+        - 0.5
+        - 0.25
+        - 0.125
+        - 0.0625
 predict:
     neutral_origin: true
     head_tail_equal_handle: tail
-    pospro:
-        head_tail_1: false
-        req_shorten: false
     use_offsets: false
-invalid_labels:
-    # - ./inputs/nes_info/invalid_labels.csv
