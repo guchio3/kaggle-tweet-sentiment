@@ -935,6 +935,7 @@ class r002HeadTailRunner(Runner):
             elif loss_weight_type == 'sel_len_log':
                 sel_len_weight = 1. * (
                     1. / (labels_tail - labels_head).float() + 2.71828).log()
+                    # 1. / (labels_tail - labels_head).float() / 10. + 2.71828).log()
                 train_losses_head = fobj(logits_head, labels_head)
                 train_loss = (train_losses_head * sel_len_weight).mean()
                 train_losses_tail = fobj(logits_tail, labels_tail)
