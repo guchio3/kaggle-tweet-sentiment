@@ -846,7 +846,7 @@ class RobertaModelWDualMultiClassClassifierAndSegmentationHeadV7(
     def __init__(self, num_labels, pretrained_model_name_or_path):
         super().__init__(num_labels, pretrained_model_name_or_path)
         self.classifier_conv_segmentation = nn.Conv1d(
-            self.model.pooler.dense.out_features, 1, 3)
+            self.model.pooler.dense.out_features, 1, 3, padding=1)
         self.add_module(
             'conv_output_segmentation',
             self.classifier_conv_segmentation)
