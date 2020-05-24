@@ -31,6 +31,7 @@ from tools.models import (
     RobertaModelWDualMultiClassClassifierAndSegmentationHeadV5,
     RobertaModelWDualMultiClassClassifierAndSegmentationHeadV6,
     RobertaModelWDualMultiClassClassifierAndSegmentationHeadV7,
+    RobertaModelWDualMultiClassClassifierAndSegmentationHeadV8,
     RobertaModelWDualMultiClassClassifierHead,
     RobertaModelWDualMultiClassClassifierHeadV2,
     RobertaModelWDualMultiClassClassifierHeadV3,
@@ -416,6 +417,11 @@ class Runner(object):
             )
         elif model_type == 'roberta-headtail-segmentation-v7':
             model = RobertaModelWDualMultiClassClassifierAndSegmentationHeadV7(
+                num_output_units,
+                pretrained_model_name_or_path
+            )
+        elif model_type == 'roberta-headtail-segmentation-v8':
+            model = RobertaModelWDualMultiClassClassifierAndSegmentationHeadV8(
                 num_output_units,
                 pretrained_model_name_or_path
             )
@@ -939,7 +945,7 @@ class r002HeadTailRunner(Runner):
                 pred_index_tail = softargmax1d(logits_tail)
                 pred_index_diff = pred_index_tail - pred_index_head
                 labels_index_diff = (labels_tail - labels_head).float()
-                train_loss += 0.001 * fobj_index_diff(pred_index_diff,
+                train_loss += 0.0003 * fobj_index_diff(pred_index_diff,
                                                       labels_index_diff)
                 # train_loss += 0.003 * fobj_index_diff(pred_index_head,
                 #                                       labels_head.float())
