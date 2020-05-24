@@ -925,19 +925,20 @@ class r002HeadTailRunner(Runner):
             logits_head = logits[0]
             logits_tail = logits[1]
 
-            if loss_weight_type == 'sel_len_log':
-                # sel_len_weight = 20. * (
-                #     1. / (labels_tail - labels_head).float() / 10. + 1.).log()
+            if loss_weight_type == 'sel_len':
                 sel_len_weight = 1. * (
-                    1. / (labels_tail - labels_head).float() + 1.)
-                    # 1. / (labels_tail - labels_head).float() + 1.).log()
+                    1. / (labels_tail - labels_head).float())
                 train_losses_head = fobj(logits_head, labels_head)
                 train_loss = (train_losses_head * sel_len_weight).mean()
                 train_losses_tail = fobj(logits_tail, labels_tail)
                 train_loss += (train_losses_tail * sel_len_weight).mean()
-                # sel_len_weight = (
-                #     1. / (labels_tail - labels_head).float() + 1.).log()
-                # train_loss = 10. * (train_losses * sel_len_weight).mean()
+            elif loss_weight_type == 'sel_len_log':
+                sel_len_weight = 1. * (
+                    1. / (labels_tail - labels_head).float() + 2.71828).log()
+                train_losses_head = fobj(logits_head, labels_head)
+                train_loss = (train_losses_head * sel_len_weight).mean()
+                train_losses_tail = fobj(logits_tail, labels_tail)
+                train_loss += (train_losses_tail * sel_len_weight).mean()
             else:
                 train_loss = fobj(logits_head, labels_head)
                 train_loss += fobj(logits_tail, labels_tail)
@@ -1022,9 +1023,16 @@ class r002HeadTailRunner(Runner):
                 logits_head = logits[0]
                 logits_tail = logits[1]
 
-                if loss_weight_type == 'sel_len_log':
-                    sel_len_weight = 20. * (
-                        1. / (labels_tail - labels_head).float() / 10. + 1.).log()
+                if loss_weight_type == 'sel_len':
+                    sel_len_weight = 1. * (
+                        1. / (labels_tail - labels_head).float() + 1.)
+                    valid_losses_head = fobj(logits_head, labels_head)
+                    valid_loss = (valid_losses_head * sel_len_weight).mean()
+                    valid_losses_tail = fobj(logits_tail, labels_tail)
+                    valid_loss += (valid_losses_tail * sel_len_weight).mean()
+                elif loss_weight_type == 'sel_len_log':
+                    sel_len_weight = 1. * (
+                        1. / (labels_tail - labels_head).float() + 1.).log()
                     valid_losses_head = fobj(logits_head, labels_head)
                     valid_loss = (valid_losses_head * sel_len_weight).mean()
                     valid_losses_tail = fobj(logits_tail, labels_tail)

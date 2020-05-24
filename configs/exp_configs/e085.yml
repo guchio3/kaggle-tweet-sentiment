@@ -52,7 +52,7 @@ train:
         - 0.25
         - 0.125
         - 0.0625
-    loss_weight_type: sel_len_log
+    loss_weight_type: sel_len
 predict:
     neutral_origin: true
     head_tail_equal_handle: tail
