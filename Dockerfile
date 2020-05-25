@@ -29,6 +29,8 @@ RUN pip install transformers==2.9.0 tokenizers==0.7.0 torch==1.5.0
 # pre-install transformers models
 RUN python -c "from transformers import BertModel, BertTokenizer; BertModel.from_pretrained('bert-base-uncased'); BertTokenizer.from_pretrained('bert-base-uncased');"
 RUN python -c "from transformers import RobertaModel, RobertaTokenizer; RobertaModel.from_pretrained('roberta-base'); RobertaTokenizer.from_pretrained('roberta-base');"
+RUN python -c "from transformers import RobertaModel, RobertaTokenizer; RobertaModel.from_pretrained('roberta-large'); RobertaTokenizer.from_pretrained('roberta-large');"
+
 
 # set jupyter notebook
 # jupyter vim key-bind settings
