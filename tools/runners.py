@@ -32,6 +32,7 @@ from tools.models import (
     RobertaModelWDualMultiClassClassifierAndSegmentationHeadV6,
     RobertaModelWDualMultiClassClassifierAndSegmentationHeadV7,
     RobertaModelWDualMultiClassClassifierAndSegmentationHeadV8,
+    RobertaModelWDualMultiClassClassifierAndSegmentationHeadV9,
     RobertaModelWDualMultiClassClassifierHead,
     RobertaModelWDualMultiClassClassifierHeadV2,
     RobertaModelWDualMultiClassClassifierHeadV3,
@@ -43,7 +44,8 @@ from tools.splitters import mySplitter
 from torch.nn import (BCELoss, BCEWithLogitsLoss, CrossEntropyLoss, MSELoss,
                       Sigmoid, Softmax)
 from torch.utils.data import DataLoader
-from torch.utils.data.sampler import RandomSampler, SequentialSampler
+from torch.utils.data.sampler import (RandomSampler, SequentialSampler,
+                                      WeightedRandomSampler)
 
 random.seed(71)
 torch.manual_seed(71)
@@ -166,6 +168,7 @@ class Runner(object):
             if 'rm_neutral' in self.cfg_train \
                     and self.cfg_train['rm_neutral']:
                 fold_trn_df = fold_trn_df.query('sentiment != "neutral"')
+
             trn_loader = self._build_loader(mode='train', df=fold_trn_df,
                                             **self.cfg_loader)
             fold_val_df = trn_df.iloc[val_idx]
@@ -428,6 +431,11 @@ class Runner(object):
                 num_output_units,
                 pretrained_model_name_or_path
             )
+        elif model_type == 'roberta-headtail-segmentation-v9':
+            model = RobertaModelWDualMultiClassClassifierAndSegmentationHeadV9(
+                num_output_units,
+                pretrained_model_name_or_path
+            )
         else:
             raise Exception(f'invalid model_type: {model_type}')
         if self.device == 'cpu':
@@ -489,7 +497,7 @@ class Runner(object):
     def _build_loader(self, mode, df,
                       trn_sampler_type, trn_batch_size,
                       tst_sampler_type, tst_batch_size,
-                      dataset_type
+                      dataset_type, neutral_weight=1.
                       ):
         if mode == 'train':
             sampler_type = trn_sampler_type
@@ -547,6 +555,14 @@ class Runner(object):
             sampler = SequentialSampler(data_source=dataset)
         elif sampler_type == 'random':
             sampler = RandomSampler(data_source=dataset)
+        elif sampler_type == 'weighted_random':
+            is_neutrals = [
+                row['sentiment'] == 'neutral' for i,
+                row in df.iterrows()]
+            weights = [
+                neutral_weight if is_neutral else 1. for is_neutral in is_neutrals]
+            sampler = WeightedRandomSampler(
+                weights=weights, num_samples=len(weights))
         else:
             raise NotImplementedError(
                 f'sampler_type: {sampler_type} is not '
@@ -935,7 +951,7 @@ class r002HeadTailRunner(Runner):
             elif loss_weight_type == 'sel_len_log':
                 sel_len_weight = 1. * (
                     1. / (labels_tail - labels_head).float() / 10. + 2.71828).log()
-                    # 1. / (labels_tail - labels_head).float() + 2.71828).log()
+                # 1. / (labels_tail - labels_head).float() + 2.71828).log()
                 train_losses_head = fobj(logits_head, labels_head)
                 train_loss = (train_losses_head * sel_len_weight).mean()
                 train_losses_tail = fobj(logits_tail, labels_tail)
