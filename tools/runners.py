@@ -1177,20 +1177,21 @@ class r002HeadTailRunner(Runner):
                 pred_label_tail = y_pred_tail.argmax()
             if pred_label_head > pred_label_tail or len(text.split()) < 2:
                 predicted_text = text
-            elif pred_label_head == pred_label_tail:
-                if head_tail_equal_handle == 'nothing':
-                    predicted_text = ''
-                elif head_tail_equal_handle == 'head':
-                    predicted_text = tokenizer.decode(
-                        input_id[pred_label_head:pred_label_tail + 1])
-                elif head_tail_equal_handle == 'tail':
-                    predicted_text = tokenizer.decode(
-                        input_id[pred_label_head - 1:pred_label_tail])
-                else:
-                    raise NotImplementedError()
+            # elif pred_label_head == pred_label_tail:
+            #     if head_tail_equal_handle == 'nothing':
+            #         predicted_text = ''
+            #     elif head_tail_equal_handle == 'head':
+            #         predicted_text = tokenizer.decode(
+            #             input_id[pred_label_head:pred_label_tail + 1])
+            #     elif head_tail_equal_handle == 'tail':
+            #         predicted_text = tokenizer.decode(
+            #             input_id[pred_label_head - 1:pred_label_tail])
+            #     else:
+            #         raise NotImplementedError()
             else:
                 predicted_text = tokenizer.decode(
-                    input_id[pred_label_head:pred_label_tail])
+                    input_id[pred_label_head:pred_label_tail + 1])
+                    # input_id[pred_label_head:pred_label_tail])
 
             if pospro['req_shorten']:
                 if len(predicted_text.split()) == 1:

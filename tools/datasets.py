@@ -453,7 +453,8 @@ class TSEHeadTailDatasetV3(TSEDataset):
         row['attention_mask'] = mask
         row['token_type_ids'] = token_type_ids
         row['labels_head'] = targets_start
-        row['labels_tail'] = targets_end + 1
+        row['labels_tail'] = targets_end
+        # row['labels_tail'] = targets_end + 1
         row['offsets'] = tweet_offsets
 
         return row
@@ -626,7 +627,8 @@ class TSEHeadTailSegmentationDatasetV3(TSEHeadTailDatasetV3):
         row = super()._prep_text(row)
         labels_segmentation = np.zeros(self.max_length)
         if row['labels_head'] >= 0 and row['labels_tail'] >= 0:
-            labels_segmentation[row['labels_head']:row['labels_tail']] = 1
+            labels_segmentation[row['labels_head']:row['labels_tail'] + 1] = 1
+            # labels_segmentation[row['labels_head']:row['labels_tail']] = 1
         row['labels_segmentation'] = labels_segmentation
         pad_token = self.tokenizer.encode_plus(
             self.tokenizer.special_tokens_map['pad_token'],
