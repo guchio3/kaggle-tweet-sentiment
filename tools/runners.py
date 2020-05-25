@@ -33,6 +33,7 @@ from tools.models import (
     RobertaModelWDualMultiClassClassifierAndSegmentationHeadV7,
     RobertaModelWDualMultiClassClassifierAndSegmentationHeadV8,
     RobertaModelWDualMultiClassClassifierAndSegmentationHeadV9,
+    RobertaModelWDualMultiClassClassifierAndSegmentationHeadV10,
     RobertaModelWDualMultiClassClassifierHead,
     RobertaModelWDualMultiClassClassifierHeadV2,
     RobertaModelWDualMultiClassClassifierHeadV3,
@@ -436,6 +437,11 @@ class Runner(object):
                 num_output_units,
                 pretrained_model_name_or_path
             )
+        elif model_type == 'roberta-headtail-segmentation-v10':
+            model = RobertaModelWDualMultiClassClassifierAndSegmentationHeadV10(
+                num_output_units,
+                pretrained_model_name_or_path
+            )
         else:
             raise Exception(f'invalid model_type: {model_type}')
         if self.device == 'cpu':
@@ -497,8 +503,8 @@ class Runner(object):
     def _build_loader(self, mode, df,
                       trn_sampler_type, trn_batch_size,
                       tst_sampler_type, tst_batch_size,
-                      dataset_type, neutral_weight=1.
-                      ):
+                      dataset_type, neutral_weight=1.,
+                      longer_posneg_rate=1.):
         if mode == 'train':
             sampler_type = trn_sampler_type
             batch_size = trn_batch_size
@@ -561,6 +567,11 @@ class Runner(object):
                 row in df.iterrows()]
             weights = [
                 neutral_weight if is_neutral else 1. for is_neutral in is_neutrals]
+            is_longer_posnegs = [
+                    len(row['selected_text'].split()) > 20 and row['sentiment'] != 'neutral'
+                    for i, row in df.iterrows()]
+            weights = [weight * longer_posneg_rate if is_longer_posneg else weight
+                       for weight, is_longer_posneg in zip(weights, is_longer_posnegs)]
             sampler = WeightedRandomSampler(
                 weights=weights, num_samples=len(weights))
         else:

@@ -14,6 +14,8 @@ loader:
     tst_sampler_type: sequential
     tst_batch_size: 96
     dataset_type: tse_headtail_dataset
+    neutral_weight: 1.0
+    longer_posneg_rate: 1.0
 dataset:
     tokenizer_type: roberta_bytelevel_bpe
     pretrained_model_name_or_path: ./inputs/datasets/
