@@ -1,4 +1,4 @@
-description: "e080 longer posneg over and more learning"
+description: "e080 longer posneg over and more learning less weight"
 runner: r002
 SINGLE_FOLD: false
 split:
@@ -12,7 +12,7 @@ loader:
     tst_sampler_type: sequential
     tst_batch_size: 96
     dataset_type: tse_headtail_segmentation_dataset_v3
-    longer_posneg_rate: 2.0
+    longer_posneg_rate: 1.5
 dataset:
     tokenizer_type: roberta_bytelevel_bpe
     pretrained_model_name_or_path: ./inputs/datasets/
@@ -29,7 +29,7 @@ fobj_segmentation:
     fobj_type: lovasz
 optimizer:
     optim_type: adam
-    lr: 0.00005
+    lr: 0.00007
 scheduler:
     scheduler_type: every_step
     every_step_unit: 0.6
