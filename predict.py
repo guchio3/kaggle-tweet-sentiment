@@ -26,10 +26,18 @@ CONFIG_DIR = './configs/exp_configs/'
 
 
 def reproduce_selected_text(row):
-    text = row['text']
-    selected_text = row['selected_text'][1:]  # remove head space
-    offset = text.lower().find(selected_text)
+    text = ' '.join(row['text'].split())
+    selected_text = ' '.join(row['selected_text'].split())
+    offset = text.lower().find(selected_text.lower())
     reproduced_selected_text = text[offset:offset+len(selected_text)]
+    if len(reproduced_selected_text) == 0:
+        print('-------------------------------------')
+        print(f'offset: {offset}')
+        print(f'text:{text.lower()}')
+        print(f'selected_text:{selected_text.lower()}')
+        print(row)
+        print('-------------------------------------')
+        raise Exception()
     return reproduced_selected_text
 
 
