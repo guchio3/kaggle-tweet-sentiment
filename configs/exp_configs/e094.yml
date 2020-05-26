@@ -1,4 +1,4 @@
-description: "e080 w/ invalid labels"
+description: "e080 pseudo"
 runner: r002
 SINGLE_FOLD: false
 split:
@@ -52,12 +52,15 @@ train:
         - 0.25
         - 0.125
         - 0.0625
+    pseudo:
+        - ./inputs/nes_info/pseudo/e080/epoch_4_1.66624_-1.00000_0.70966_checkpoint_pseudo.csv
+        - ./inputs/nes_info/pseudo/e080/epoch_4_1.67677_-1.00000_0.70890_checkpoint_pseudo.csv
+        - ./inputs/nes_info/pseudo/e080/epoch_1_1.58494_-1.00000_0.71288_checkpoint_pseudo.csv
+        - ./inputs/nes_info/pseudo/e080/epoch_3_1.58988_-1.00000_0.71368_checkpoint_pseudo.csv
+        - ./inputs/nes_info/pseudo/e080/epoch_4_1.61799_-1.00000_0.71130_checkpoint_pseudo.csv
 predict:
     neutral_origin: true
     head_tail_equal_handle: tail
     pospro:
         head_tail_1: false
         req_shorten: true
-invalid_labels:
-    - ./inputs/nes_info/invalid_labels.csv
-

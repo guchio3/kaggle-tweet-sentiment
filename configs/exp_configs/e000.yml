@@ -57,6 +57,7 @@ train:
     use_offsets: false
     segmentation_loss_ratios: 1
     loss_weight_type: nothing
+    pseudo:
 predict:
     neutral_origin: true
     head_tail_equal_handle: tail

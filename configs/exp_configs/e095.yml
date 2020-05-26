@@ -1,4 +1,4 @@
-description: "e080 w/ invalid labels"
+description: "e080 w/o embedding train"
 runner: r002
 SINGLE_FOLD: false
 split:
@@ -58,6 +58,3 @@ predict:
     pospro:
         head_tail_1: false
         req_shorten: true
-invalid_labels:
-    - ./inputs/nes_info/invalid_labels.csv
-

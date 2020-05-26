@@ -24,6 +24,7 @@ from tools.losses import lovasz_hinge
 from tools.metrics import jaccard
 from tools.models import (
     EMA, BertModelWBinaryMultiLabelClassifierHead,
+    BertModelWDualMultiClassClassifierAndSegmentationHead,
     BertModelWDualMultiClassClassifierHead, RobertaModelHeadClassAndAnchorHead,
     RobertaModelWDualMultiClassClassifierAndCumsumSegmentationHead,
     RobertaModelWDualMultiClassClassifierAndSegmentationHead,
@@ -170,6 +171,11 @@ class Runner(object):
                     and self.cfg_train['rm_neutral']:
                 fold_trn_df = fold_trn_df.query('sentiment != "neutral"')
 
+            if self.cfg_train['pseudo']:
+                fold_trn_df = pd.concat([fold_trn_df,
+                                         pd.read_csv(self.cfg_train['pseudo'][fold_num])],
+                                        axis=0).reset_index(drop=True)
+
             trn_loader = self._build_loader(mode='train', df=fold_trn_df,
                                             **self.cfg_loader)
             fold_val_df = trn_df.iloc[val_idx]
@@ -218,6 +224,7 @@ class Runner(object):
             self.logger.info('start trainging !')
             for current_epoch in iter_epochs:
                 if self.checkpoint and current_epoch <= checkpoint_epoch:
+                    print(f'pass epoch {current_epoch}')
                     continue
 
                 start_time = time.time()
@@ -397,6 +404,11 @@ class Runner(object):
                 num_output_units,
                 pretrained_model_name_or_path
             )
+        elif model_type == 'bert-headtail-segmentation':
+            model = BertModelWDualMultiClassClassifierAndSegmentationHead(
+                num_output_units,
+                pretrained_model_name_or_path
+            )
         elif model_type == 'roberta-headtail-segmentation':
             model = RobertaModelWDualMultiClassClassifierAndSegmentationHead(
                 num_output_units,
@@ -568,8 +580,9 @@ class Runner(object):
             weights = [
                 neutral_weight if is_neutral else 1. for is_neutral in is_neutrals]
             is_longer_posnegs = [
-                    len(row['selected_text'].split()) > 20 and row['sentiment'] != 'neutral'
-                    for i, row in df.iterrows()]
+                len(row['selected_text'].split()
+                    ) > 20 and row['sentiment'] != 'neutral'
+                for i, row in df.iterrows()]
             weights = [weight * longer_posneg_rate if is_longer_posneg else weight
                        for weight, is_longer_posneg in zip(weights, is_longer_posnegs)]
             sampler = WeightedRandomSampler(
@@ -590,8 +603,8 @@ class Runner(object):
         return loader
 
     def _warmup(self, current_epoch, warmup_batch_or_epoch, model):
+        module = model if self.device == 'cpu' else model.module
         if current_epoch == 0:
-            module = model if self.device == 'cpu' else model.module
             for name, child in module.named_children():
                 if 'classifier' in name:
                     self.logger.info(name + ' is unfrozen')
@@ -603,9 +616,12 @@ class Runner(object):
                         param.requires_grad = False
         if current_epoch == warmup_batch_or_epoch:
             self.logger.info("Turn on all the layers")
-            for name, child in model.named_children():
+            # for name, child in model.named_children():
+            for name, child in module.named_children():
                 for param in child.parameters():
                     param.requires_grad = True
+        # for param in module.model.embeddings.parameters():
+        #     param.requires_grad = False
 
     def _save_checkpoint(self, fold_num, current_epoch,
                          model, optimizer, scheduler,
@@ -615,7 +631,7 @@ class Runner(object):
             os.makedirs(f'./checkpoints/{self.exp_id}/{fold_num}')
         # pth means pytorch
         cp_filename = f'./checkpoints/{self.exp_id}/{fold_num}/' \
-            f'epoch_{current_epoch}_{val_loss:.5f}_{best_thresh:.5f}' \
+            f'fold_{fold_num}_epoch_{current_epoch}_{val_loss:.5f}_{best_thresh:.5f}' \
             f'_{best_jaccard:.5f}_checkpoint.pth'
         # f'_{val_metric:.5f}_checkpoint.pth'
         module = model if self.device == 'cpu' else model.module
@@ -641,7 +657,7 @@ class Runner(object):
         for filename in glob(f'./checkpoints/{self.exp_id}/{fold_num}/*'):
             split_filename = filename.split('/')[-1].split('_')
             # temp_loss = float(split_filename[2])
-            temp_metric = float(split_filename[4])
+            temp_metric = float(split_filename[6])
             # if temp_loss < best_loss:
             if temp_metric > best_metric:
                 best_filename = filename
