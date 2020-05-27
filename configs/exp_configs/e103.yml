@@ -31,7 +31,7 @@ optimizer:
     lr: 0.00005 # 03
 scheduler:
     # scheduler_type: every_step
-    scheduler_type: pass
+    scheduler_type: cosine
     every_step_unit: 0.5
 train:
     max_epoch: 5
