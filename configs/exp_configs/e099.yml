@@ -1,13 +1,13 @@
-description: "e080 8 folds"
+description: "e080 seq train"
 runner: r002
 SINGLE_FOLD: false
 split:
-    split_type: abhishek8
-    split_num: 8
+    split_type: abhishek5
+    split_num: 5
     shuffle: true
     random_state: 71
 loader:
-    trn_sampler_type: random
+    trn_sampler_type: sequential
     trn_batch_size: 96
     tst_sampler_type: sequential
     tst_batch_size: 96

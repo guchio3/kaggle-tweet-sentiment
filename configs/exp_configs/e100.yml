@@ -1,9 +1,9 @@
-description: "e080 8 folds"
-runner: r002
+description: "e064 no offsets cumsum segmentation pospro 1"
+runner: r005
 SINGLE_FOLD: false
 split:
-    split_type: abhishek8
-    split_num: 8
+    split_type: abhishek5
+    split_num: 5
     shuffle: true
     random_state: 71
 loader:
@@ -11,7 +11,7 @@ loader:
     trn_batch_size: 96
     tst_sampler_type: sequential
     tst_batch_size: 96
-    dataset_type: tse_headtail_segmentation_dataset_v3
+    dataset_type: tse_headtail_segmentation_dataset_v5
 dataset:
     tokenizer_type: roberta_bytelevel_bpe
     pretrained_model_name_or_path: ./inputs/datasets/
@@ -19,7 +19,7 @@ dataset:
     add_pair_prefix_space: false
     max_length: 125
 model:
-    model_type: roberta-headtail-segmentation
+    model_type: roberta-headtail-cumsum-segmentation-v2
     pretrained_model_name_or_path: roberta-base
     num_output_units: 125
 fobj:
@@ -28,7 +28,7 @@ fobj_segmentation:
     fobj_type: lovasz
 optimizer:
     optim_type: adam
-    lr: 0.00005
+    lr: 0.00005 # 03
 scheduler:
     scheduler_type: every_step
     every_step_unit: 0.5
@@ -55,6 +55,7 @@ train:
 predict:
     neutral_origin: true
     head_tail_equal_handle: tail
+    use_offsets: false
     pospro:
         head_tail_1: false
         req_shorten: true

@@ -18,6 +18,7 @@ from tools.datasets import (TSEHeadTailDataset, TSEHeadTailDatasetV2,
                             TSEHeadTailSegmentationDataset,
                             TSEHeadTailSegmentationDatasetV3,
                             TSEHeadTailSegmentationDatasetV4,
+                            TSEHeadTailSegmentationDatasetV5,
                             TSESegmentationDataset)
 from tools.loggers import myLogger
 from tools.losses import lovasz_hinge
@@ -27,6 +28,7 @@ from tools.models import (
     BertModelWDualMultiClassClassifierAndSegmentationHead,
     BertModelWDualMultiClassClassifierHead, RobertaModelHeadClassAndAnchorHead,
     RobertaModelWDualMultiClassClassifierAndCumsumSegmentationHead,
+    RobertaModelWDualMultiClassClassifierAndCumsumSegmentationHeadV2,
     RobertaModelWDualMultiClassClassifierAndSegmentationHead,
     RobertaModelWDualMultiClassClassifierAndSegmentationHeadV4,
     RobertaModelWDualMultiClassClassifierAndSegmentationHeadV5,
@@ -420,6 +422,11 @@ class Runner(object):
                 num_output_units,
                 pretrained_model_name_or_path
             )
+        elif model_type == 'roberta-headtail-cumsum-segmentation-v2':
+            model = RobertaModelWDualMultiClassClassifierAndCumsumSegmentationHeadV2(
+                num_output_units,
+                pretrained_model_name_or_path
+            )
         elif model_type == 'roberta-headtail-segmentation-v4':
             model = RobertaModelWDualMultiClassClassifierAndSegmentationHeadV4(
                 num_output_units,
@@ -569,6 +576,11 @@ class Runner(object):
                                                        **self.cfg_dataset)
         elif dataset_type == 'tse_headtail_segmentation_dataset_v4':
             dataset = TSEHeadTailSegmentationDatasetV4(mode=mode, df=df,
+                                                       logger=self.logger,
+                                                       debug=self.debug,
+                                                       **self.cfg_dataset)
+        elif dataset_type == 'tse_headtail_segmentation_dataset_v5':
+            dataset = TSEHeadTailSegmentationDatasetV5(mode=mode, df=df,
                                                        logger=self.logger,
                                                        debug=self.debug,
                                                        **self.cfg_dataset)
@@ -1795,3 +1807,102 @@ class r002HeadTailRunner(Runner):
 #             predicted_texts.append(predicted_text)
 #
 #         return predicted_texts
+
+
+class r005HeadTailRunner(r002HeadTailRunner):
+    def _train_loop(self, model, optimizer, fobj,
+                    loader, warmup_batch, ema, accum_mod, use_specical_mask,
+                    fobj_segmentation, segmentation_loss_ratio,
+                    loss_weight_type, fobj_index_diff):
+        model.train()
+        running_loss = 0
+
+        softargmax1d = SoftArgmax1D(
+            beta=5., device=self.device).to(
+            self.device)
+
+        for batch_i, batch in enumerate(tqdm(loader)):
+            if warmup_batch > 0:
+                self._warmup(batch_i, warmup_batch, model)
+
+            input_ids = batch['input_ids'].to(self.device)
+            labels_head = batch['labels_head'].to(self.device)
+            labels_tail = batch['labels_tail'].to(self.device)
+            attention_mask = batch['attention_mask'].to(self.device)
+            special_tokens_mask = batch['special_tokens_mask'].to(self.device) \
+                if use_specical_mask else None
+
+            (logits, ) = model(
+                input_ids=input_ids,
+                attention_mask=attention_mask,
+                special_tokens_mask=special_tokens_mask,
+            )
+
+            # 5 is temerature
+            logits_head = logits[0]
+            logits_tail = logits[1]
+
+            if loss_weight_type == 'sel_len':
+                sel_len_weight = 1. * (
+                    1. / (labels_tail - labels_head).float())
+                train_losses_head = fobj(logits_head, labels_head)
+                train_loss = (train_losses_head * sel_len_weight).mean()
+                train_losses_tail = fobj(logits_tail, labels_tail)
+                train_loss += (train_losses_tail * sel_len_weight).mean()
+            elif loss_weight_type == 'sel_len_log':
+                sel_len_weight = 1. * (
+                    1. / (labels_tail - labels_head).float() / 10. + 2.71828).log()
+                # 1. / (labels_tail - labels_head).float() + 2.71828).log()
+                train_losses_head = fobj(logits_head, labels_head)
+                train_loss = (train_losses_head * sel_len_weight).mean()
+                train_losses_tail = fobj(logits_tail, labels_tail)
+                train_loss += (train_losses_tail * sel_len_weight).mean()
+            else:
+                train_loss = fobj(logits_head, labels_head)
+                train_loss += fobj(logits_tail, labels_tail)
+
+            if fobj_segmentation:
+                labels_segmentation_head = batch['labels_segmentation_head']\
+                    .to(self.device)
+                labels_segmentation_tail = batch['labels_segmentation_tail']\
+                    .to(self.device)
+                logits_segmentation_head = logits[2]
+                logits_segmentation_tail = logits[3]
+
+                if self.cfg_fobj_segmentation['fobj_type'] == 'lovasz':
+                    train_loss += segmentation_loss_ratio * \
+                        fobj_segmentation(logits_segmentation_head,
+                                          labels_segmentation_head,
+                                          ignore=-1)
+                    train_loss += segmentation_loss_ratio * \
+                        fobj_segmentation(logits_segmentation_tail,
+                                          labels_segmentation_tail,
+                                          ignore=-1)
+                else:
+                    raise NotImplementedError()
+
+            if fobj_index_diff:
+                pred_index_head = softargmax1d(logits_head)
+                pred_index_tail = softargmax1d(logits_tail)
+                pred_index_diff = pred_index_tail - pred_index_head
+                labels_index_diff = (labels_tail - labels_head).float()
+                train_loss += 0.0003 * fobj_index_diff(pred_index_diff,
+                                                       labels_index_diff)
+                # train_loss += 0.003 * fobj_index_diff(pred_index_head,
+                #                                       labels_head.float())
+                # train_loss += 0.003 * fobj_index_diff(pred_index_tail,
+                #                                       labels_tail.float())
+
+            train_loss.backward()
+
+            running_loss += train_loss.item()
+
+            if (batch_i + 1) % accum_mod == 0:
+                optimizer.step()
+                optimizer.zero_grad()
+
+                ema.on_batch_end(model)
+
+        train_loss = running_loss / len(loader)
+
+        return train_loss

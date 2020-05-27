@@ -40,6 +40,8 @@ if __name__ == '__main__':
         from tools.runners import r003HeadTailSegmentRunner as Runner
     elif config['runner'] == 'r004':
         from tools.runners import r004HeadAnchorRunner as Runner
+    elif config['runner'] == 'r005':
+        from tools.runners import r005HeadTailRunner as Runner
     else:
         raise NotImplementedError(f'{config["runner"]} is not implemented.')
     runner = Runner(exp_id, checkpoint, device, debug, config, default_config)
