@@ -28,7 +28,7 @@ fobj_segmentation:
     fobj_type: lovasz
 optimizer:
     optim_type: adam
-    lr: 0.00003 # 03
+    lr: 0.00005 # 03
 scheduler:
     # scheduler_type: every_step
     scheduler_type: pass
