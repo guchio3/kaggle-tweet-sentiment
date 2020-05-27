@@ -1472,8 +1472,8 @@ class RobertaModelWDualMultiClassClassifierAndCumsumSegmentationHead(
         logits_head = self.classifier_conv_head(output).squeeze()
         logits_tail = self.classifier_conv_tail(output).squeeze()
 
-        prob_head = self.softmax(logits_head.double())
-        prob_tail = self.softmax(logits_tail.double())
+        prob_head = self.softmax(logits_head.double()).float()
+        prob_tail = self.softmax(logits_tail.double()).float()
         cumsum_head = torch.cumsum(prob_head, dim=1)
         cumsum_tail = torch.cumsum(prob_tail, dim=1)
         rev_prob_head = self.softmax(logits_head.double()).flip(dims=(1, ))

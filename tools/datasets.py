@@ -672,6 +672,9 @@ class TSEHeadTailSegmentationDatasetV4(TSEHeadTailDatasetV3):
         if row['labels_head'] >= 0 and row['labels_tail'] >= 0:
             labels_segmentation[row['labels_head']:row['labels_tail']] = 1
         row['labels_segmentation'] = labels_segmentation
+        pad_token = 1
+        row['labels_segmentation'][np.asarray(
+            row['input_ids']) == pad_token] = -1
         # pad_token = self.tokenizer.encode_plus(
         #     self.tokenizer.special_tokens_map['pad_token'],
         #     text_pair=None,
