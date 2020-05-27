@@ -1,4 +1,4 @@
-description: "e064 no offsets cumsum segmentation pospro 1"
+description: "e064 no offsets head tail cumsum segmentation pospro 1"
 runner: r005
 SINGLE_FOLD: false
 split:
