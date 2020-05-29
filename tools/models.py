@@ -1476,13 +1476,13 @@ class RobertaModelWDualMultiClassClassifierAndCumsumSegmentationHead(
         prob_tail = self.softmax(logits_tail.double()).float()
         cumsum_head = torch.cumsum(prob_head, dim=1)
         cumsum_tail = torch.cumsum(prob_tail, dim=1)
-        rev_prob_head = self.softmax(logits_head.double()).flip(dims=(1, ))
-        rev_prob_tail = self.softmax(logits_tail.double()).flip(dims=(1, ))
-        rev_cumsum_head = torch.cumsum(rev_prob_head, dim=1).flip(dims=(1, ))
-        rev_cumsum_tail = torch.cumsum(rev_prob_tail, dim=1).flip(dims=(1, ))
-        cumsum_pred = self.relu(cumsum_head - cumsum_tail) + 1e-7
-        cumsum_pred += self.relu(rev_cumsum_tail - rev_cumsum_head) + 1e-7
-        cumsum_pred /= 2
+        # rev_prob_head = self.softmax(logits_head.double()).flip(dims=(1, ))
+        # rev_prob_tail = self.softmax(logits_tail.double()).flip(dims=(1, ))
+        # rev_cumsum_head = torch.cumsum(rev_prob_head, dim=1).flip(dims=(1, ))
+        # rev_cumsum_tail = torch.cumsum(rev_prob_tail, dim=1).flip(dims=(1, ))
+        cumsum_pred = self.relu(cumsum_head - cumsum_tail)  # + 1e-7
+        # cumsum_pred += self.relu(rev_cumsum_tail - rev_cumsum_head) + 1e-7
+        # cumsum_pred /= 2
 
         # special tokes を -inf で mask
         if special_tokens_mask is not None:
@@ -1533,6 +1533,8 @@ class RobertaModelWDualMultiClassClassifierAndCumsumSegmentationHeadV2(
         prob_tail = self.softmax(logits_tail.double()).float()
         cumsum_head = torch.cumsum(prob_head, dim=1)
         cumsum_tail = torch.cumsum(prob_tail, dim=1)
+        # cumsum_head_rev = torch.cumsum(prob_head.flip(dims=(1, )), dim=1).flip(dims=(1, ))
+        # cumsum_tail_rev = torch.cumsum(prob_tail.flip(dims=(1, )), dim=1).flip(dims=(1, ))
         # rev_prob_head = self.softmax(logits_head.double()).flip(dims=(1, ))
         # rev_prob_tail = self.softmax(logits_tail.double()).flip(dims=(1, ))
         # rev_cumsum_head = torch.cumsum(rev_prob_head, dim=1).flip(dims=(1, ))
@@ -1556,6 +1558,7 @@ class RobertaModelWDualMultiClassClassifierAndCumsumSegmentationHeadV2(
 
         # add hidden states and attention if they are here
         outputs = ((logits_head, logits_tail,
-                    cumsum_head, cumsum_tail),)
+                    cumsum_head, cumsum_tail,),)
+                    # cumsum_head_rev, cumsum_tail_rev),)
 
         return outputs  # logits, (hidden_states), (attentions)

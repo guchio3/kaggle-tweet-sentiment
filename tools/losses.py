@@ -1,10 +1,3 @@
-"""
-FROM: https://github.com/bermanmaxim/LovaszSoftmax/blob/master/pytorch/lovasz_losses.py
-
-Lovasz-Softmax and Jaccard hinge loss in PyTorch
-Maxim Berman 2018 ESAT-PSI KU Leuven (MIT License)
-"""
-
 from __future__ import division, print_function
 
 import numpy as np
@@ -17,6 +10,74 @@ try:
     from itertools import ifilterfalse
 except ImportError:  # py3k
     from itertools import filterfalse as ifilterfalse
+
+
+def dist_between(start_logits, end_logits, device='cpu', max_seq_len=128):
+    """get dist btw. pred & ground_truth"""
+
+    linear_func = torch.tensor(
+        np.linspace(
+            0,
+            1,
+            max_seq_len,
+            endpoint=False),
+        requires_grad=False)
+    linear_func = linear_func.to(device)
+
+    start_pos = (start_logits * linear_func).sum(axis=1)
+    end_pos = (end_logits * linear_func).sum(axis=1)
+
+    diff = end_pos - start_pos
+
+    return diff.sum(axis=0) / diff.size(0)
+
+
+def dist_loss(start_logits, end_logits, start_positions,
+              end_positions, device='cpu', max_seq_len=128, scale=1):
+    """calculate distance loss between prediction's length & GT's length
+
+    Input
+    - start_logits ; shape (batch, max_seq_len{128})
+        - logits for start index
+    - end_logits
+        - logits for end index
+    - start_positions ; shape (batch, 1)
+        - start index for GT
+    - end_positions
+        - end index for GT
+    """
+    start_logits = torch.nn.Softmax(1)(
+        start_logits)  # shape ; (batch, max_seq_len)
+    end_logits = torch.nn.Softmax(1)(end_logits)
+
+    start_one_hot = torch.nn.functional.one_hot(
+        start_positions, num_classes=max_seq_len).to(device)
+    end_one_hot = torch.nn.functional.one_hot(
+        end_positions, num_classes=max_seq_len).to(device)
+
+    pred_dist = dist_between(start_logits, end_logits, device, max_seq_len)
+    gt_dist = dist_between(
+        start_one_hot,
+        end_one_hot,
+        device,
+        max_seq_len)  # always positive
+    diff = (gt_dist - pred_dist)
+
+    # as diff is smaller, make it get closer to the one
+    rev_diff_squared = 1 - torch.sqrt(diff * diff)
+    # by using negative log function, if argument is near zero -> inifinite,
+    # near one -> zero
+    loss = -torch.log(rev_diff_squared)
+
+    return loss * scale
+
+
+"""
+FROM: https://github.com/bermanmaxim/LovaszSoftmax/blob/master/pytorch/lovasz_losses.py
+
+Lovasz-Softmax and Jaccard hinge loss in PyTorch
+Maxim Berman 2018 ESAT-PSI KU Leuven (MIT License)
+"""
 
 
 def lovasz_grad(gt_sorted):
@@ -85,7 +146,8 @@ def iou(preds, labels, C, EMPTY=1., ignore=None, per_image=False):
 # --------------------------- BINARY LOSSES ---------------------------
 
 
-def lovasz_hinge(logits, labels, per_image=True, ignore=None):
+def lovasz_hinge(logits, labels, per_image=True,
+                 ignore=None, weights=None):
     """
     Binary Lovasz hinge loss
       logits: [B, H, W] Variable, logits at each pixel (between -\infty and +\infty)
@@ -94,8 +156,16 @@ def lovasz_hinge(logits, labels, per_image=True, ignore=None):
       ignore: void class id
     """
     if per_image:
-        loss = mean(lovasz_hinge_flat(*flatten_binary_scores(log.unsqueeze(0), lab.unsqueeze(0), ignore))
-                    for log, lab in zip(logits, labels))
+        if weights is not None:
+            loss = 0.
+            assert len(weights) == len(labels)
+            losses = [lovasz_hinge_flat(*flatten_binary_scores(log.unsqueeze(0), lab.unsqueeze(0), ignore))
+                      for log, lab in zip(logits, labels)]
+            for weight, loss_i in zip(weights, losses):
+                loss += weight * loss_i / len(labels)
+        else:
+            loss = mean(lovasz_hinge_flat(*flatten_binary_scores(log.unsqueeze(0), lab.unsqueeze(0), ignore))
+                        for log, lab in zip(logits, labels))
     else:
         loss = lovasz_hinge_flat(
             *

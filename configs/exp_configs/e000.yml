@@ -58,12 +58,14 @@ train:
     segmentation_loss_ratios: 1
     loss_weight_type: nothing
     pseudo:
+    use_dist_loss: false
 predict:
     neutral_origin: true
     head_tail_equal_handle: tail
     pospro:
         head_tail_1: false
         req_shorten: false
+        regex_1: false
     use_offsets: false
 invalid_labels:
     # - ./inputs/nes_info/invalid_labels.csv

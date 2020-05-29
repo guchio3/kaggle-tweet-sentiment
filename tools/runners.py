@@ -3,6 +3,7 @@ import datetime
 import itertools
 import os
 import random
+import re
 import time
 from glob import glob
 from itertools import chain
@@ -21,7 +22,7 @@ from tools.datasets import (TSEHeadTailDataset, TSEHeadTailDatasetV2,
                             TSEHeadTailSegmentationDatasetV5,
                             TSESegmentationDataset)
 from tools.loggers import myLogger
-from tools.losses import lovasz_hinge
+from tools.losses import dist_loss, lovasz_hinge
 from tools.metrics import jaccard
 from tools.models import (
     EMA, BertModelWBinaryMultiLabelClassifierHead,
@@ -193,6 +194,9 @@ class Runner(object):
                 if isinstance(self.cfg_train['segmentation_loss_ratios'], int):
                     segmentation_loss_ratios = [self.cfg_train['segmentation_loss_ratios']] \
                         * self.cfg_train['max_epoch']
+                elif isinstance(self.cfg_train['segmentation_loss_ratios'], float):
+                    segmentation_loss_ratios = [self.cfg_train['segmentation_loss_ratios']] \
+                        * self.cfg_train['max_epoch']
                 elif isinstance(self.cfg_train['segmentation_loss_ratios'], list):
                     segmentation_loss_ratios = self.cfg_train['segmentation_loss_ratios']
                 else:
@@ -264,7 +268,8 @@ class Runner(object):
                     model, optimizer, fobj, trn_loader, warmup_batch,
                     ema, accum_mod, use_special_mask,
                     fobj_segmentation, segmentation_loss_ratio,
-                    self.cfg_train['loss_weight_type'], fobj_index_diff)
+                    self.cfg_train['loss_weight_type'], fobj_index_diff,
+                    self.cfg_train['use_dist_loss'])
                 ema.on_epoch_end(model)
                 ema.set_weights(ema_model)  # NOTE: model?
                 use_offsets = self.cfg_predict['use_offsets']
@@ -957,7 +962,7 @@ class r002HeadTailRunner(Runner):
     def _train_loop(self, model, optimizer, fobj,
                     loader, warmup_batch, ema, accum_mod, use_specical_mask,
                     fobj_segmentation, segmentation_loss_ratio,
-                    loss_weight_type, fobj_index_diff):
+                    loss_weight_type, fobj_index_diff, use_dist_loss):
         model.train()
         running_loss = 0
 
@@ -1032,6 +1037,19 @@ class r002HeadTailRunner(Runner):
                 #                                       labels_head.float())
                 # train_loss += 0.003 * fobj_index_diff(pred_index_tail,
                 #                                       labels_tail.float())
+
+            if use_dist_loss:
+                # train_loss += dist_loss(logits_head, logits_tail,
+                #                         labels_tail, labels_tail,
+                # self.device, loader.dataset.max_length)
+                pred_index_head = softargmax1d(logits_head)
+                pred_index_tail = softargmax1d(logits_tail)
+                pred_index_diff = (
+                    pred_index_tail - pred_index_head) / loader.dataset.max_length
+                labels_index_diff = (
+                    (labels_tail - labels_head).float()) / loader.dataset.max_length
+                diff = (pred_index_diff - labels_index_diff).mean()
+                train_loss += -torch.log(1 - torch.sqrt(diff * diff))
 
             train_loss.backward()
 
@@ -1231,7 +1249,18 @@ class r002HeadTailRunner(Runner):
                     predicted_text = predicted_text.replace('!!!!', '!')
                     predicted_text = predicted_text.replace('..', '.')
                     predicted_text = predicted_text.replace('...', '.')
-
+            if pospro['regex_1']:
+                a = re.findall('[^A-Za-z0-9]', predicted_text)
+                b = re.sub('[^A-Za-z0-9]+', '', predicted_text)
+                try:
+                    if a.count('.') == 3:
+                        predicted_text = b + '. ' + b + '..'
+                    elif a.count('!') == 4:
+                        predicted_text = b + '! ' + b + '!! ' + b + '!!!'
+                    else:
+                        predicted_text = predicted_text
+                except BaseException:
+                    predicted_text = predicted_text
             predicted_texts.append(predicted_text)
 
         return predicted_texts
@@ -1866,18 +1895,33 @@ class r005HeadTailRunner(r002HeadTailRunner):
                     .to(self.device)
                 labels_segmentation_tail = batch['labels_segmentation_tail']\
                     .to(self.device)
+                # labels_segmentation_head_rev = batch['labels_segmentation_head_rev']\
+                #     .to(self.device)
+                # labels_segmentation_tail_rev = batch['labels_segmentation_tail_rev']\
+                #     .to(self.device)
                 logits_segmentation_head = logits[2]
                 logits_segmentation_tail = logits[3]
+                # logits_segmentation_head_rev = logits[4]
+                # logits_segmentation_tail_rev = logits[5]
 
                 if self.cfg_fobj_segmentation['fobj_type'] == 'lovasz':
+                    # train_loss = segmentation_loss_ratio * \
                     train_loss += segmentation_loss_ratio * \
                         fobj_segmentation(logits_segmentation_head,
                                           labels_segmentation_head,
-                                          ignore=-1)
+                                          ignore=-1)  # , weights=1./labels_segmentation_head.sum(dim=1))
                     train_loss += segmentation_loss_ratio * \
                         fobj_segmentation(logits_segmentation_tail,
                                           labels_segmentation_tail,
-                                          ignore=-1)
+                                          ignore=-1)  # , weights=1./labels_segmentation_tail.sum(dim=1))
+                    # train_loss += 0.5 * segmentation_loss_ratio * \
+                    #     fobj_segmentation(logits_segmentation_head_rev,
+                    #                       labels_segmentation_head_rev,
+                    #                       ignore=-1)
+                    # train_loss += 0.5 * segmentation_loss_ratio * \
+                    #     fobj_segmentation(logits_segmentation_tail_rev,
+                    #                       labels_segmentation_tail_rev,
+                    #                       ignore=-1)
                 else:
                     raise NotImplementedError()
 

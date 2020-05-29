@@ -630,14 +630,14 @@ class TSEHeadTailSegmentationDatasetV3(TSEHeadTailDatasetV3):
         if row['labels_head'] >= 0 and row['labels_tail'] >= 0:
             labels_segmentation[row['labels_head']:row['labels_tail']] = 1
         row['labels_segmentation'] = labels_segmentation
-        pad_token = 1
+        # pad_token = 1
         # pad_token = self.tokenizer.encode_plus(
         #     ' ' + self.tokenizer.special_tokens_map['pad_token'],
         #     text_pair=None,
         #     add_special_tokens=False,
         #     max_length=1)['input_ids'][0]
-        row['labels_segmentation'][np.asarray(
-            row['input_ids']) == pad_token] = -1
+        # row['labels_segmentation'][np.asarray(
+        #     row['input_ids']) == pad_token] = -1
         return row
 
 
@@ -672,9 +672,9 @@ class TSEHeadTailSegmentationDatasetV4(TSEHeadTailDatasetV3):
         if row['labels_head'] >= 0 and row['labels_tail'] >= 0:
             labels_segmentation[row['labels_head']:row['labels_tail']] = 1
         row['labels_segmentation'] = labels_segmentation
-        pad_token = 1
-        row['labels_segmentation'][np.asarray(
-            row['input_ids']) == pad_token] = -1
+        # pad_token = 1
+        # row['labels_segmentation'][np.asarray(
+        #     row['input_ids']) == pad_token] = -1
         # pad_token = self.tokenizer.encode_plus(
         #     self.tokenizer.special_tokens_map['pad_token'],
         #     text_pair=None,
@@ -710,6 +710,8 @@ class TSEHeadTailSegmentationDatasetV5(TSEHeadTailDatasetV3):
             'labels_segmentation': torch.tensor(row['labels_segmentation']),
             'labels_segmentation_head': torch.tensor(row['labels_segmentation_head']),
             'labels_segmentation_tail': torch.tensor(row['labels_segmentation_tail']),
+            'labels_segmentation_head_rev': torch.tensor(row['labels_segmentation_head_rev']),
+            'labels_segmentation_tail_rev': torch.tensor(row['labels_segmentation_tail_rev']),
         }
 
     def _prep_text(self, row):
@@ -717,13 +719,19 @@ class TSEHeadTailSegmentationDatasetV5(TSEHeadTailDatasetV3):
         labels_segmentation = np.zeros(self.max_length)
         labels_segmentation_head = np.zeros(self.max_length)
         labels_segmentation_tail = np.zeros(self.max_length)
+        labels_segmentation_head_rev = np.zeros(self.max_length)
+        labels_segmentation_tail_rev = np.zeros(self.max_length)
         if row['labels_head'] >= 0 and row['labels_tail'] >= 0:
             labels_segmentation[row['labels_head']:row['labels_tail']] = 1
             labels_segmentation_head[row['labels_head']:] = 1
             labels_segmentation_tail[row['labels_tail']:] = 1
+            labels_segmentation_head_rev[:row['labels_head']+1] = 1
+            labels_segmentation_tail_rev[:row['labels_tail']+1] = 1
         row['labels_segmentation'] = labels_segmentation
         row['labels_segmentation_head'] = labels_segmentation_head
         row['labels_segmentation_tail'] = labels_segmentation_tail
+        row['labels_segmentation_head_rev'] = labels_segmentation_head_rev
+        row['labels_segmentation_tail_rev'] = labels_segmentation_tail_rev
         pad_token = 1
         # pad_token = self.tokenizer.encode_plus(
         #     self.tokenizer.special_tokens_map['pad_token'],
@@ -732,8 +740,8 @@ class TSEHeadTailSegmentationDatasetV5(TSEHeadTailDatasetV3):
         #     max_length=1)['input_ids'][0]
         row['labels_segmentation'][np.asarray(
             row['input_ids']) == pad_token] = -1
-        row['labels_segmentation_head'][np.asarray(
-            row['input_ids']) == pad_token] = -1
-        row['labels_segmentation_tail'][np.asarray(
-            row['input_ids']) == pad_token] = -1
+        # row['labels_segmentation_head'][np.asarray(
+        #     row['input_ids']) == pad_token] = -1
+        # row['labels_segmentation_tail'][np.asarray(
+        #     row['input_ids']) == pad_token] = -1
         return row
