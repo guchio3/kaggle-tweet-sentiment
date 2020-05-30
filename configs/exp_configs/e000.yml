@@ -55,6 +55,8 @@ train:
     accum_mod: 1
     use_special_mask: false
     use_offsets: false
+    head_ratio: 1
+    tail_ratio: 1
     segmentation_loss_ratios: 1
     loss_weight_type: nothing
     pseudo:
@@ -66,6 +68,7 @@ predict:
         head_tail_1: false
         req_shorten: false
         regex_1: false
+        regex_2: false
     use_offsets: false
 invalid_labels:
     # - ./inputs/nes_info/invalid_labels.csv

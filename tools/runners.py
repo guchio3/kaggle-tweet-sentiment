@@ -39,6 +39,7 @@ from tools.models import (
     RobertaModelWDualMultiClassClassifierAndSegmentationHeadV9,
     RobertaModelWDualMultiClassClassifierAndSegmentationHeadV10,
     RobertaModelWDualMultiClassClassifierAndSegmentationHeadV11,
+    RobertaModelWDualMultiClassClassifierAndSegmentationHeadV12,
     RobertaModelWDualMultiClassClassifierHead,
     RobertaModelWDualMultiClassClassifierHeadV2,
     RobertaModelWDualMultiClassClassifierHeadV3,
@@ -469,6 +470,11 @@ class Runner(object):
             )
         elif model_type == 'roberta-headtail-segmentation-v11':
             model = RobertaModelWDualMultiClassClassifierAndSegmentationHeadV11(
+                num_output_units,
+                pretrained_model_name_or_path
+            )
+        elif model_type == 'roberta-headtail-segmentation-v12':
+            model = RobertaModelWDualMultiClassClassifierAndSegmentationHeadV12(
                 num_output_units,
                 pretrained_model_name_or_path
             )
@@ -1007,8 +1013,10 @@ class r002HeadTailRunner(Runner):
                 train_losses_tail = fobj(logits_tail, labels_tail)
                 train_loss += (train_losses_tail * sel_len_weight).mean()
             else:
-                train_loss = fobj(logits_head, labels_head)
-                train_loss += fobj(logits_tail, labels_tail)
+                # train_loss = fobj(logits_head, labels_head)
+                # train_loss += fobj(logits_tail, labels_tail)
+                train_loss = self.cfg_train['head_ratio'] * fobj(logits_head, labels_head)
+                train_loss += self.cfg_train['tail_ratio'] * fobj(logits_tail, labels_tail)
 
             if fobj_segmentation:
                 labels_segmentation = batch['labels_segmentation']\
@@ -1261,6 +1269,8 @@ class r002HeadTailRunner(Runner):
                         predicted_text = predicted_text
                 except BaseException:
                     predicted_text = predicted_text
+            if pospro['regex_2']:
+                predicted_text = re.sub('^(\.+)', '.', predicted_text)
             predicted_texts.append(predicted_text)
 
         return predicted_texts
@@ -1887,8 +1897,8 @@ class r005HeadTailRunner(r002HeadTailRunner):
                 train_losses_tail = fobj(logits_tail, labels_tail)
                 train_loss += (train_losses_tail * sel_len_weight).mean()
             else:
-                train_loss = fobj(logits_head, labels_head)
-                train_loss += fobj(logits_tail, labels_tail)
+                train_loss = self.cfg_train['head_ratio'] * fobj(logits_head, labels_head)
+                train_loss += self.cfg_train['tail_ratio'] * fobj(logits_tail, labels_tail)
 
             if fobj_segmentation:
                 labels_segmentation_head = batch['labels_segmentation_head']\
