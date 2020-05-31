@@ -1271,6 +1271,19 @@ class r002HeadTailRunner(Runner):
                     predicted_text = predicted_text
             if pospro['regex_2']:
                 predicted_text = re.sub('^(\.+)', '.', predicted_text)
+            if pospro['regex_3']:
+                if len(predicted_text.split()) == 1:
+                    predicted_text = re.sub('^(\.+)', '.', predicted_text)
+                    predicted_text = re.sub('\.\.\.\.\.\.\.$', '..', predicted_text)
+                    predicted_text = re.sub('\.\.\.\.\.\.$', '..', predicted_text)
+                    predicted_text = re.sub('\.\.\.\.\.$', '.', predicted_text)
+                    predicted_text = re.sub('\.\.\.\.$', '..', predicted_text)
+                    predicted_text = re.sub('\.\.\.$', '..', predicted_text)
+                    predicted_text = re.sub('\.\.\.$', '..', predicted_text)
+                    predicted_text = re.sub('!!!!!!!!$', '!', predicted_text)
+                    predicted_text = re.sub('!!!!!$', '!', predicted_text)
+                    predicted_text = re.sub('!!!!$', '!', predicted_text)
+                    predicted_text = re.sub('!!!$', '!!', predicted_text)
             predicted_texts.append(predicted_text)
 
         return predicted_texts

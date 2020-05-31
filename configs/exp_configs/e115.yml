@@ -1,4 +1,4 @@
-description: "e107 more seg"
+description: "e114 regex_3"
 runner: r002
 SINGLE_FOLD: false
 split:
@@ -57,4 +57,5 @@ predict:
     head_tail_equal_handle: tail
     pospro:
         head_tail_1: false
-        req_shorten: true
+        req_shorten: false
+        regex_3: true

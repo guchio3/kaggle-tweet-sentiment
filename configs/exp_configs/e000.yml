@@ -69,6 +69,7 @@ predict:
         req_shorten: false
         regex_1: false
         regex_2: false
+        regex_3: false
     use_offsets: false
 invalid_labels:
     # - ./inputs/nes_info/invalid_labels.csv
