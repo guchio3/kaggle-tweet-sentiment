@@ -1271,7 +1271,7 @@ class r002HeadTailRunner(Runner):
                 predicted_texts.append(text)
                 continue
             if y_pred_single is not None and y_pred_single.argmax() != 0:
-                predicted_texts.append(tokenizer.decode(input_id[y_pred_single.argmax()]))
+                predicted_texts.append(tokenizer.decode([input_id[y_pred_single.argmax()]]))
                 continue
             if pospro['head_tail_1']:
                 pred_label_head, pred_label_tail = self.calc_best_se_indexes(
