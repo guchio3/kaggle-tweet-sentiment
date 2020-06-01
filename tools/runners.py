@@ -1055,7 +1055,7 @@ class r002HeadTailRunner(Runner):
                                           labels_segmentation)
 
             if single_word:
-                labels_single = batch['labels_single_word']\
+                labels_single = batch['labels_single_word'].long()\
                     .to(self.device)
                 logits_single = logits[3]
                 train_loss += ce_loss(logits_single, labels_single)
