@@ -42,17 +42,17 @@ train:
     ema_level: batch
     ema_n: 1  # < 1 means no ema
     accum_mod:
-        - 2
-        - 2
-        - 2
-        - 2
-        - 2
+        - 1
+        - 1
+        - 1
+        - 4
+        - 4
     segmentation_loss_ratios:
         - 2.5
-        - 2.5
-        - 2.5
-        - 2.5
-        - 2.5
+        - 2.0
+        - 1.5
+        - 1.0
+        - 0.5
 predict:
     neutral_origin: true
     head_tail_equal_handle: tail
