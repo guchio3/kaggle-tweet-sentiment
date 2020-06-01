@@ -20,7 +20,7 @@ dataset:
     max_length: 125
     tail_index: kernel
 model:
-    model_type: roberta-headtail-segmentation
+    model_type: roberta-headtail-segmentation-v14
     pretrained_model_name_or_path: roberta-base
     num_output_units: 125
 fobj:
