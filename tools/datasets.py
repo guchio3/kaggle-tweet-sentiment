@@ -700,7 +700,7 @@ class TSEHeadTailSegmentationDatasetV3(TSEHeadTailDatasetV3):
                 labels_single_word[row['labels_head']] = 1
             else:
                 labels_single_word[0] = 1
-        labels_single_word[labels_single_word] = labels_single_word
+        row['labels_single_word'] = labels_single_word
         # pad_token = 1
         # pad_token = self.tokenizer.encode_plus(
         #     ' ' + self.tokenizer.special_tokens_map['pad_token'],
