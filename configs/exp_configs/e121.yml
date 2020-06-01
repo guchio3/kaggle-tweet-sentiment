@@ -1,4 +1,4 @@
-description: "e107 regex_3"
+description: "e120 v10 model"
 runner: r002
 SINGLE_FOLD: false
 split:
@@ -18,8 +18,9 @@ dataset:
     do_lower_case: true
     add_pair_prefix_space: false
     max_length: 125
+    tail_index: kernel
 model:
-    model_type: roberta-headtail-segmentation
+    model_type: roberta-headtail-segmentation-v10
     pretrained_model_name_or_path: roberta-base
     num_output_units: 125
 fobj:
@@ -41,11 +42,11 @@ train:
     ema_level: batch
     ema_n: 1  # < 1 means no ema
     accum_mod:
+        - 1
         - 2
         - 4
         - 8
         - 16
-        - 32
     segmentation_loss_ratios:
         - 2.5
         - 1.25
@@ -59,3 +60,4 @@ predict:
         head_tail_1: false
         req_shorten: false
         regex_3: true
+    tail_index: kernel

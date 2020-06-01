@@ -1,4 +1,4 @@
-description: "e107 regex_3"
+description: "e116 norm cosine"
 runner: r002
 SINGLE_FOLD: false
 split:
@@ -19,7 +19,7 @@ dataset:
     add_pair_prefix_space: false
     max_length: 125
 model:
-    model_type: roberta-headtail-segmentation
+    model_type: roberta-headtail-segmentation-v13
     pretrained_model_name_or_path: roberta-base
     num_output_units: 125
 fobj:
@@ -35,6 +35,7 @@ scheduler:
 train:
     max_epoch: 5
     warmup_epoch: 0
+    warmup_batch: 0
     thresh_unit: 0.05  # no meaning for head tail
     rm_neutral: false
     ema_mu: 0.9

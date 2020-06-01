@@ -40,6 +40,7 @@ from tools.models import (
     RobertaModelWDualMultiClassClassifierAndSegmentationHeadV10,
     RobertaModelWDualMultiClassClassifierAndSegmentationHeadV11,
     RobertaModelWDualMultiClassClassifierAndSegmentationHeadV12,
+    RobertaModelWDualMultiClassClassifierAndSegmentationHeadV13,
     RobertaModelWDualMultiClassClassifierHead,
     RobertaModelWDualMultiClassClassifierHeadV2,
     RobertaModelWDualMultiClassClassifierHeadV3,
@@ -246,7 +247,7 @@ class Runner(object):
                 self._warmup(current_epoch, self.cfg_train['warmup_epoch'],
                              model)
 
-                warmup_batch = self.cfg_train['warmup_batch']
+                warmup_batch = self.cfg_train['warmup_batch'] if current_epoch == 0 else 0
 
                 ema_model = copy.deepcopy(model)
                 ema_model.eval()
@@ -272,7 +273,10 @@ class Runner(object):
                     self.cfg_train['loss_weight_type'], fobj_index_diff,
                     self.cfg_train['use_dist_loss'])
                 ema.on_epoch_end(model)
-                ema.set_weights(ema_model)  # NOTE: model?
+                if self.cfg_train['ema_n'] > 0:
+                    ema.set_weights(ema_model)  # NOTE: model?
+                else:
+                    ema_model = model
                 use_offsets = self.cfg_predict['use_offsets']
                 val_loss, best_thresh, best_jaccard, val_textIDs, \
                     val_input_ids, val_preds, val_labels = \
@@ -475,6 +479,11 @@ class Runner(object):
             )
         elif model_type == 'roberta-headtail-segmentation-v12':
             model = RobertaModelWDualMultiClassClassifierAndSegmentationHeadV12(
+                num_output_units,
+                pretrained_model_name_or_path
+            )
+        elif model_type == 'roberta-headtail-segmentation-v13':
+            model = RobertaModelWDualMultiClassClassifierAndSegmentationHeadV13(
                 num_output_units,
                 pretrained_model_name_or_path
             )
@@ -961,6 +970,7 @@ class r002HeadTailRunner(Runner):
                 self.cfg_predict['neutral_origin'],
                 self.cfg_predict['head_tail_equal_handle'],
                 self.cfg_predict['pospro'],
+                self.cfg_predict['tail_index']
             )
 
         return textIDs, predicted_texts
@@ -1190,6 +1200,7 @@ class r002HeadTailRunner(Runner):
                                        self.cfg_predict['neutral_origin'],
                                        self.cfg_predict['head_tail_equal_handle'],
                                        self.cfg_predict['pospro'],
+                                       self.cfg_predict['tail_index'],
                                        )
 
         valid_preds = (valid_preds_head, valid_preds_tail)
@@ -1222,7 +1233,8 @@ class r002HeadTailRunner(Runner):
                              y_preds_tail, tokenizer,
                              neutral_origin=False,
                              head_tail_equal_handle='tail',
-                             pospro={}):
+                             pospro={},
+                             tail_index='natural'):
         predicted_texts = []
         for text, input_id, sentiment, y_pred_head, y_pred_tail \
                 in zip(texts, input_ids, sentiments, y_preds_head, y_preds_tail):
@@ -1235,6 +1247,10 @@ class r002HeadTailRunner(Runner):
             else:
                 pred_label_head = y_pred_head.argmax()
                 pred_label_tail = y_pred_tail.argmax()
+
+            if tail_index == 'kernel':
+                pred_label_tail += 1
+
             if pred_label_head > pred_label_tail or len(text.split()) < 2:
                 predicted_text = text
             elif pred_label_head == pred_label_tail:
@@ -1251,6 +1267,10 @@ class r002HeadTailRunner(Runner):
             else:
                 predicted_text = tokenizer.decode(
                     input_id[pred_label_head:pred_label_tail])
+
+            if self.cfg_dataset['tokenize_period']:
+                predicted_text = re.sub(' %%', '.', predicted_text)
+                predicted_text = re.sub(' ##', '!', predicted_text)
 
             if pospro['req_shorten']:
                 if len(predicted_text.split()) == 1:
@@ -1303,7 +1323,7 @@ class r002HeadTailRunner(Runner):
     def _calc_jaccard(self, texts, input_ids, sentiments, selected_texts,
                       y_preds_head, y_preds_tail, tokenizer, thresh_unit,
                       neutral_origin=False, head_tail_equal_handle='tail',
-                      pospro={}):
+                      pospro={}, tail_index='natural'):
 
         temp_jaccard = 0
         predicted_texts = self._get_predicted_texts(
@@ -1316,6 +1336,7 @@ class r002HeadTailRunner(Runner):
             neutral_origin,
             head_tail_equal_handle,
             pospro,
+            tail_index
         )
         for selected_text, predicted_text in zip(
                 selected_texts, predicted_texts):

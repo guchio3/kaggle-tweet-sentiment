@@ -2,6 +2,7 @@ import math
 
 import torch
 from torch import nn
+import torch.nn.functional as F
 from transformers import BertModel, RobertaModel
 
 
@@ -194,6 +195,13 @@ class RobertaModelWDualMultiClassClassifierHead(nn.Module):
             if isinstance(pretrained_model_name_or_path, str):
                 self.model = RobertaModel.from_pretrained(
                     pretrained_model_name_or_path)
+                # model = RobertaModel.from_pretrained(
+                #     pretrained_model_name_or_path)
+                # config = model.config
+                # # config.hidden_dropout_prob = 0.3
+                # config.hidden_act = 'gelu_new'
+                # self.model = RobertaModel(config)
+                # self.model.load_state_dict(model.state_dict())
             else:
                 # for sub
                 self.model = RobertaModel(pretrained_model_name_or_path)
@@ -1042,8 +1050,10 @@ class RobertaModelWDualMultiClassClassifierHeadV12(nn.Module):
         self.num_labels = num_labels
         self.dropout = nn.Dropout(0.2)
         self.sigmoid = nn.Sigmoid()
-        self.classifier_conv_head = nn.Conv1d(self.model.pooler.dense.out_features+1, 1, 1, padding=0)
-        self.classifier_conv_tail = nn.Conv1d(self.model.pooler.dense.out_features+1, 1, 1, padding=0)
+        self.classifier_conv_head = nn.Conv1d(
+            self.model.pooler.dense.out_features + 1, 1, 1, padding=0)
+        self.classifier_conv_tail = nn.Conv1d(
+            self.model.pooler.dense.out_features + 1, 1, 1, padding=0)
 
     def forward(self, input_ids=None, attention_mask=None,
                 token_type_ids=None, position_ids=None, head_mask=None,
@@ -1331,7 +1341,8 @@ class RobertaModelWDualMultiClassClassifierAndSegmentationHeadV9(
         output_segmentation = self.dropout(output_segmentation)
         output_head = self.dropout(output_head)
         output_tail = self.dropout(output_tail)
-        logits_segmentation = self.classifier_conv_head(output_segmentation).squeeze()
+        logits_segmentation = self.classifier_conv_head(
+            output_segmentation).squeeze()
         logits_head = self.classifier_conv_head(output_head).squeeze()
         logits_tail = self.classifier_conv_tail(output_tail).squeeze()
 
@@ -1501,7 +1512,8 @@ class RobertaModelWDualMultiClassClassifierAndSegmentationHeadV12(
         output = self.dropout(output)
 
         logits_segmentation = self.classifier_conv_segmentation(output)
-        new_output = torch.cat([output, self.sigmoid(logits_segmentation)], dim=1)
+        new_output = torch.cat(
+            [output, self.sigmoid(logits_segmentation)], dim=1)
         logits_segmentation = logits_segmentation.squeeze()
         logits_head = self.classifier_conv_head(new_output).squeeze()
         logits_tail = self.classifier_conv_tail(new_output).squeeze()
@@ -1524,6 +1536,87 @@ class RobertaModelWDualMultiClassClassifierAndSegmentationHeadV12(
                     logits_segmentation),)
 
         return outputs  # logits, (hidden_states), (attentions)
+
+
+class RobertaModelWDualMultiClassClassifierAndSegmentationHeadV13(nn.Module):
+    def __init__(self, num_labels, pretrained_model_name_or_path):
+        super().__init__()
+        if pretrained_model_name_or_path:
+            if isinstance(pretrained_model_name_or_path, str):
+                self.model = RobertaModel.from_pretrained(
+                    pretrained_model_name_or_path,
+                    output_hidden_states=True)
+            else:
+                # for sub
+                self.model = RobertaModel(
+                    pretrained_model_name_or_path,
+                    output_hidden_states=True)
+        else:
+            raise NotImplementedError
+        self.num_labels = num_labels
+        self.dropout = nn.Dropout(0.2)
+        # self.classifier_head = nn.Parameter(torch.FloatTensor(
+        #     self.model.pooler.dense.out_features * 2, 1))
+        # self.classifier_tail = nn.Parameter(torch.FloatTensor(
+        #     self.model.pooler.dense.out_features * 2, 1))
+        # self.classifier_segmentation = nn.Parameter(torch.FloatTensor(
+        #     self.model.pooler.dense.out_features * 2, 1))
+        self.classifier_head = nn.Parameter(torch.FloatTensor(
+            self.model.pooler.dense.out_features, 1))
+        self.classifier_tail = nn.Parameter(torch.FloatTensor(
+            self.model.pooler.dense.out_features, 1))
+        self.classifier_segmentation = nn.Parameter(torch.FloatTensor(
+            self.model.pooler.dense.out_features, 1))
+        nn.init.xavier_uniform_(self.classifier_head)
+        nn.init.xavier_uniform_(self.classifier_tail)
+        nn.init.xavier_uniform_(self.classifier_segmentation)
+
+    def forward(self, input_ids=None, attention_mask=None,
+                token_type_ids=None, position_ids=None, head_mask=None,
+                inputs_embeds=None, encoder_hidden_states=None,
+                encoder_attention_mask=None, special_tokens_mask=None):
+        outputs = self.model(input_ids,
+                             attention_mask=attention_mask,
+                             token_type_ids=token_type_ids,
+                             position_ids=position_ids,
+                             head_mask=head_mask,
+                             inputs_embeds=inputs_embeds,
+                             encoder_hidden_states=encoder_hidden_states,
+                             encoder_attention_mask=encoder_attention_mask)
+
+        # output = torch.cat([outputs[2][-1], outputs[2][-2]], dim=-1)
+        # output = F.normalize(output)
+        output1 = F.normalize(outputs[2][-3])
+        output2 = F.normalize(outputs[2][-2])
+        output3 = F.normalize(outputs[2][-1])
+        # output = self.dropout(output)
+        # logits_head = F.linear(output, F.normalize(self.classifier_head))
+        # logits_tail = F.linear(output, F.normalize(self.classifier_tail))
+        # logits_segmentation = F.linear(output, F.normalize(self.classifier_segmentation))
+        logits_segmentation = (output1 @ F.normalize(self.classifier_segmentation)).squeeze()
+        logits_head = (output2 @ F.normalize(self.classifier_head)).squeeze()
+        logits_tail = (output3 @ F.normalize(self.classifier_tail)).squeeze()
+
+        # special tokes を -inf で mask
+        if special_tokens_mask is not None:
+            inf = torch.tensor(float('inf')).to(logits_head.device)
+            logits_head = logits_head.where(special_tokens_mask == 0, -inf)
+            # we use [head:tail] type indexing,
+            # so tail mask should be shifted
+            tail_special_tokens_mask = torch.cat(
+                [special_tokens_mask[:, -1:],
+                 special_tokens_mask[:, :-1]],
+                dim=1)
+            logits_tail = logits_tail.where(
+                tail_special_tokens_mask == 0, -inf)
+
+        # add hidden states and attention if they are here
+        outputs = ((logits_head, logits_tail, logits_segmentation),)
+
+        return outputs  # logits, (hidden_states), (attentions)
+
+    def resize_token_embeddings(self, token_num):
+        self.model.resize_token_embeddings(token_num)
 
 
 class RobertaModelWDualMultiClassClassifierAndCumsumSegmentationHead(
@@ -1638,6 +1731,6 @@ class RobertaModelWDualMultiClassClassifierAndCumsumSegmentationHeadV2(
         # add hidden states and attention if they are here
         outputs = ((logits_head, logits_tail,
                     cumsum_head, cumsum_tail,),)
-                    # cumsum_head_rev, cumsum_tail_rev),)
+        # cumsum_head_rev, cumsum_tail_rev),)
 
         return outputs  # logits, (hidden_states), (attentions)

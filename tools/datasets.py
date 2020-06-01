@@ -1,3 +1,4 @@
+import re
 from abc import abstractmethod
 
 import numpy as np
@@ -12,9 +13,12 @@ from transformers import BertTokenizer, RobertaTokenizer
 class TSEDataset(Dataset):
     def __init__(self, mode, tokenizer_type, pretrained_model_name_or_path,
                  do_lower_case, max_length, df,
-                 logger=None, debug=False, add_pair_prefix_space=True):
+                 logger=None, debug=False, add_pair_prefix_space=True,
+                 tokenize_period=False, tail_index='natural'):
         self.mode = mode
         self.add_pair_prefix_space = add_pair_prefix_space
+        self.tokenize_period = tokenize_period
+        self.tail_index = tail_index
         if tokenizer_type == 'bert':
             self.tokenizer = BertTokenizer\
                 .from_pretrained(
@@ -406,8 +410,17 @@ class TSEHeadTailDatasetV3(TSEDataset):
 
         # tweet = " " + " ".join(row['text'].split()).lower()
         # selected_text = " " + " ".join(row['selected_text'].split()).lower()
-        tweet = " " + " ".join(row['text'].split())
-        selected_text = " " + " ".join(row['selected_text'].split())
+        if self.tokenize_period:
+            tweet_base = re.sub('\.', ' %%', row['text'])
+            tweet_base = re.sub('!', ' ##', tweet_base)
+            tweet = " " + " ".join(tweet_base.split())
+            selected_text_base = re.sub('\.', ' %%', row['selected_text'])
+            selected_text_base = re.sub('!', ' ##', selected_text_base)
+            selected_text = " " + " ".join(selected_text_base.split())
+
+        else:
+            tweet = " " + " ".join(row['text'].split())
+            selected_text = " " + " ".join(row['selected_text'].split())
 
         len_st = len(selected_text) - 1
         idx0 = None
@@ -455,7 +468,12 @@ class TSEHeadTailDatasetV3(TSEDataset):
         row['attention_mask'] = mask
         row['token_type_ids'] = token_type_ids
         row['labels_head'] = targets_start
-        row['labels_tail'] = targets_end + 1
+        if self.tail_index == 'natural':
+            row['labels_tail'] = targets_end + 1
+        elif self.tail_index == 'kernel':
+            row['labels_tail'] = targets_end
+        else:
+            raise NotImplementedError()
         row['offsets'] = tweet_offsets
 
         return row
@@ -628,7 +646,10 @@ class TSEHeadTailSegmentationDatasetV3(TSEHeadTailDatasetV3):
         row = super()._prep_text(row)
         labels_segmentation = np.zeros(self.max_length)
         if row['labels_head'] >= 0 and row['labels_tail'] >= 0:
-            labels_segmentation[row['labels_head']:row['labels_tail']] = 1
+            if self.tail_index == 'natural':
+                labels_segmentation[row['labels_head']:row['labels_tail']] = 1
+            elif self.tail_index == 'kernel':
+                labels_segmentation[row['labels_head']:row['labels_tail']+1] = 1
         row['labels_segmentation'] = labels_segmentation
         # pad_token = 1
         # pad_token = self.tokenizer.encode_plus(

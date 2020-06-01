@@ -22,6 +22,8 @@ dataset:
     do_lower_case: true
     add_pair_prefix_space: false
     max_length: 125
+    tokenize_period: false
+    tail_index: natural
 model:
     model_type: roberta-headtail
     pretrained_model_name_or_path: roberta-base
@@ -71,5 +73,6 @@ predict:
         regex_2: false
         regex_3: false
     use_offsets: false
+    tail_index: natural
 invalid_labels:
     # - ./inputs/nes_info/invalid_labels.csv
