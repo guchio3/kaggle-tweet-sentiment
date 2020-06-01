@@ -285,7 +285,7 @@ class Runner(object):
                     self._valid_loop(ema_model, fobj, val_loader,
                                      use_special_mask, use_offsets,
                                      self.cfg_train['loss_weight_type'],
-                                     self.cfg_predict['sigle_word'])
+                                     self.cfg_predict['single_word'])
                 epoch_best_jaccard = max(epoch_best_jaccard, best_jaccard)
 
                 self.logger.info(
