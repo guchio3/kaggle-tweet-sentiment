@@ -683,7 +683,6 @@ class TSEHeadTailSegmentationDatasetV3(TSEHeadTailDatasetV3):
     def _prep_text(self, row):
         row = super()._prep_text(row)
         labels_segmentation = np.zeros(self.max_length)
-        labels_single_word = np.zeros(self.max_length)
         if row['labels_head'] >= 0 and row['labels_tail'] >= 0:
             if self.tail_index == 'natural':
                 labels_segmentation[row['labels_head']:row['labels_tail']] = 1
@@ -692,14 +691,14 @@ class TSEHeadTailSegmentationDatasetV3(TSEHeadTailDatasetV3):
         row['labels_segmentation'] = labels_segmentation
         if self.tail_index == 'kernel':
             if row['labels_head'] == row['labels_tail']:
-                labels_single_word[row['labels_head']] = 1
+                labels_single_word = row['labels_head']
             else:
-                labels_single_word[0] = 1
+                labels_single_word = 0
         else:
             if row['labels_head'] + 1 == row['labels_tail']:
-                labels_single_word[row['labels_head']] = 1
+                labels_single_word = row['labels_head']
             else:
-                labels_single_word[0] = 1
+                labels_single_word = 0
         row['labels_single_word'] = labels_single_word
         # pad_token = 1
         # pad_token = self.tokenizer.encode_plus(
