@@ -271,7 +271,8 @@ class Runner(object):
                     ema, accum_mod, use_special_mask,
                     fobj_segmentation, segmentation_loss_ratio,
                     self.cfg_train['loss_weight_type'], fobj_index_diff,
-                    self.cfg_train['use_dist_loss'])
+                    self.cfg_train['use_dist_loss'],
+                    self.cfg_train['single_word'])
                 ema.on_epoch_end(model)
                 if self.cfg_train['ema_n'] > 0:
                     ema.set_weights(ema_model)  # NOTE: model?
@@ -282,7 +283,8 @@ class Runner(object):
                     val_input_ids, val_preds, val_labels = \
                     self._valid_loop(ema_model, fobj, val_loader,
                                      use_special_mask, use_offsets,
-                                     self.cfg_train['loss_weight_type'])
+                                     self.cfg_train['loss_weight_type'],
+                                     self.cfg_predict['sigle_word'])
                 epoch_best_jaccard = max(epoch_best_jaccard, best_jaccard)
 
                 self.logger.info(
@@ -978,13 +980,15 @@ class r002HeadTailRunner(Runner):
     def _train_loop(self, model, optimizer, fobj,
                     loader, warmup_batch, ema, accum_mod, use_specical_mask,
                     fobj_segmentation, segmentation_loss_ratio,
-                    loss_weight_type, fobj_index_diff, use_dist_loss):
+                    loss_weight_type, fobj_index_diff, use_dist_loss,
+                    single_word):
         model.train()
         running_loss = 0
 
         softargmax1d = SoftArgmax1D(
             beta=5., device=self.device).to(
             self.device)
+        ce_loss = CrossEntropyLoss()
 
         for batch_i, batch in enumerate(tqdm(loader)):
             if warmup_batch > 0:
@@ -1044,6 +1048,12 @@ class r002HeadTailRunner(Runner):
                         fobj_segmentation(logits_segmentation,
                                           labels_segmentation)
 
+            if single_word:
+                labels_segmentation = batch['labels_segmentation']\
+                    .to(self.device)
+                logits_single = logits[3]
+                train_loss += ce_loss(logits_single, logits_single)
+
             if fobj_index_diff:
                 pred_index_head = softargmax1d(logits_head)
                 pred_index_tail = softargmax1d(logits_tail)
@@ -1084,7 +1094,7 @@ class r002HeadTailRunner(Runner):
         return train_loss
 
     def _valid_loop(self, model, fobj, loader, use_special_mask,
-                    use_offsets, loss_weight_type):
+                    use_offsets, loss_weight_type, single_word):
         model.eval()
         softmax = Softmax(dim=1)
         running_loss = 0
@@ -1096,6 +1106,7 @@ class r002HeadTailRunner(Runner):
             valid_input_ids = []
             valid_offsets = []
             valid_sentiments = []
+            valid_preds_single = []
             valid_selected_texts = []
             valid_preds_head, valid_preds_tail = [], []
             valid_labels_head, valid_labels_tail = [], []
@@ -1120,6 +1131,11 @@ class r002HeadTailRunner(Runner):
                 )
                 logits_head = logits[0]
                 logits_tail = logits[1]
+                if single_word:
+                    predicted_single = softmax(logits[3].data)
+                    valid_preds_single.append(predicted_single)
+                else:
+                    valid_preds_single.append(None)
 
                 if loss_weight_type == 'sel_len':
                     sel_len_weight = 1. * (
@@ -1170,21 +1186,27 @@ class r002HeadTailRunner(Runner):
                 itertools.chain.from_iterable(valid_selected_texts))
             valid_preds_head = torch.cat(valid_preds_head)
             valid_preds_tail = torch.cat(valid_preds_tail)
+            if single_word:
+                valid_preds_single = torch.cat(valid_preds_single)
+            else:
+                valid_preds_single = list(
+                    itertools.chain.from_iterable(valid_preds_single))
             valid_labels_head = torch.cat(valid_labels_head)
             valid_labels_tail = torch.cat(valid_labels_tail)
 
             if use_offsets:
-                best_thresh, best_jaccard = \
-                    self._calc_jaccard_offsets(valid_texts,
-                                               valid_offsets,
-                                               valid_sentiments,
-                                               valid_selected_texts,
-                                               valid_preds_head,
-                                               valid_preds_tail,
-                                               self.cfg_predict['neutral_origin'],
-                                               self.cfg_predict['head_tail_equal_handle'],
-                                               self.cfg_predict['pospro'],
-                                               )
+                raise NotImplementedError()
+                # best_thresh, best_jaccard = \
+                #     self._calc_jaccard_offsets(valid_texts,
+                #                                valid_offsets,
+                #                                valid_sentiments,
+                #                                valid_selected_texts,
+                #                                valid_preds_head,
+                #                                valid_preds_tail,
+                #                                self.cfg_predict['neutral_origin'],
+                #                                self.cfg_predict['head_tail_equal_handle'],
+                #                                self.cfg_predict['pospro'],
+                #                                )
             else:
                 best_thresh, best_jaccard = \
                     self._calc_jaccard(valid_texts,
@@ -1195,6 +1217,7 @@ class r002HeadTailRunner(Runner):
                                        # valid_labels_tail,
                                        valid_preds_head,
                                        valid_preds_tail,
+                                       valid_preds_single,
                                        loader.dataset.tokenizer,
                                        self.cfg_train['thresh_unit'],
                                        self.cfg_predict['neutral_origin'],
@@ -1230,16 +1253,19 @@ class r002HeadTailRunner(Runner):
     #    return best_thresh, best_jaccard
 
     def _get_predicted_texts(self, texts, input_ids, sentiments, y_preds_head,
-                             y_preds_tail, tokenizer,
+                             y_preds_tail, y_preds_single, tokenizer,
                              neutral_origin=False,
                              head_tail_equal_handle='tail',
                              pospro={},
                              tail_index='natural'):
         predicted_texts = []
-        for text, input_id, sentiment, y_pred_head, y_pred_tail \
-                in zip(texts, input_ids, sentiments, y_preds_head, y_preds_tail):
+        for text, input_id, sentiment, y_pred_head, y_pred_tail, y_pred_single \
+                in zip(texts, input_ids, sentiments, y_preds_head, y_preds_tail, y_preds_single):
             if neutral_origin and sentiment == 'neutral':
                 predicted_texts.append(text)
+                continue
+            if y_pred_single is not None and y_pred_single.argmax() != 0:
+                predicted_texts.append(tokenizer.decode(input_id[y_pred_single.argmax()]))
                 continue
             if pospro['head_tail_1']:
                 pred_label_head, pred_label_tail = self.calc_best_se_indexes(
@@ -1251,9 +1277,9 @@ class r002HeadTailRunner(Runner):
             if tail_index == 'kernel':
                 pred_label_tail += 1
 
-            if pred_label_head > pred_label_tail or len(text.split()) < 2:
-                predicted_text = text
-            elif pred_label_head == pred_label_tail:
+            # if pred_label_head > pred_label_tail or len(text.split()) < 2:
+            #     predicted_text = text
+            if pred_label_head >= pred_label_tail:
                 if head_tail_equal_handle == 'nothing':
                     predicted_text = ''
                 elif head_tail_equal_handle == 'head':
@@ -1262,6 +1288,20 @@ class r002HeadTailRunner(Runner):
                 elif head_tail_equal_handle == 'tail':
                     predicted_text = tokenizer.decode(
                         input_id[pred_label_head - 1:pred_label_tail])
+                elif head_tail_equal_handle == 'larger':
+                    while pred_label_head >= pred_label_tail:
+                        print(f'flip found, {text[:10]}...')
+                        if y_pred_head.max() <= y_pred_tail.max():
+                            # NOTE: copy にしたい
+                            y_pred_head[y_pred_head.argmax()] = 0.
+                        else:
+                            y_pred_tail[y_pred_tail.argmax()] = 0.
+                        pred_label_head = y_pred_head.argmax()
+                        pred_label_tail = y_pred_tail.argmax()
+                        if tail_index == 'kernel':
+                            pred_label_tail += 1
+                    predicted_text = tokenizer.decode(
+                        input_id[pred_label_head:pred_label_tail])
                 else:
                     raise NotImplementedError()
             else:
@@ -1321,7 +1361,7 @@ class r002HeadTailRunner(Runner):
         return best_idxs
 
     def _calc_jaccard(self, texts, input_ids, sentiments, selected_texts,
-                      y_preds_head, y_preds_tail, tokenizer, thresh_unit,
+                      y_preds_head, y_preds_tail, y_preds_single, tokenizer, thresh_unit,
                       neutral_origin=False, head_tail_equal_handle='tail',
                       pospro={}, tail_index='natural'):
 
@@ -1332,6 +1372,7 @@ class r002HeadTailRunner(Runner):
             sentiments,
             y_preds_head,
             y_preds_tail,
+            y_preds_single,
             tokenizer,
             neutral_origin,
             head_tail_equal_handle,

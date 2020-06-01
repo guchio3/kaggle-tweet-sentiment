@@ -10,6 +10,43 @@ from torch.utils.data import Dataset
 from transformers import BertTokenizer, RobertaTokenizer
 
 
+def remove_http(text, selected_text):
+    len_st = len(selected_text) - 1
+    http_len = len("<HTTP>")
+    http_offset = 0
+    org_text = text
+    new_selected_text = selected_text
+
+    for ind in (i for i, e in enumerate(text) if e == selected_text[1]):
+        if " " + text[ind: ind + len_st] == selected_text:
+            idx0 = ind
+            idx1 = ind + len_st - 1  # 最後のindex
+
+    find_idx = 0
+#     print(selected_text)
+    for i, vocab in enumerate(text.split(" ")):
+        if "http" in vocab:
+            http_idx0 = org_text.find(vocab, find_idx)
+            len_vocab = len(vocab)
+            http_idx1 = http_idx0 + len_vocab - 1  # 最後のindex
+            http_vocab = vocab
+            text = text.replace(http_vocab, "<HTTP>")
+            find_idx = http_idx1  # 複数回出現する場合に検索範囲を更新する
+#             print(f" vocab:{http_vocab}\n org_text:{org_text} h0:{http_idx0},h1:{http_idx1}")
+
+            if http_idx0 <= idx1 and http_idx1 >= idx0:
+                dup_idx0 = max(idx0, http_idx0)
+                dup_idx1 = min(idx1, http_idx1)
+                dup_idx0_s = dup_idx0 - (idx0 - 1)  # in org selected
+                dup_idx1_s = dup_idx1 - (idx0 - 1)  # in org selected
+
+                new_selected_text = new_selected_text[:http_offset + dup_idx0_s] + \
+                    "<HTTP>" + new_selected_text[http_offset + dup_idx1_s + 1:]
+                http_offset += http_len - (dup_idx1_s - dup_idx0_s + 1)
+
+    return text, new_selected_text
+
+
 class TSEDataset(Dataset):
     def __init__(self, mode, tokenizer_type, pretrained_model_name_or_path,
                  do_lower_case, max_length, df,
@@ -411,10 +448,10 @@ class TSEHeadTailDatasetV3(TSEDataset):
         # tweet = " " + " ".join(row['text'].split()).lower()
         # selected_text = " " + " ".join(row['selected_text'].split()).lower()
         if self.tokenize_period:
-            tweet_base = re.sub('\.', ' %%', row['text'])
+            tweet_base = re.sub(r'\.', ' %%', row['text'])
             tweet_base = re.sub('!', ' ##', tweet_base)
             tweet = " " + " ".join(tweet_base.split())
-            selected_text_base = re.sub('\.', ' %%', row['selected_text'])
+            selected_text_base = re.sub(r'\.', ' %%', row['selected_text'])
             selected_text_base = re.sub('!', ' ##', selected_text_base)
             selected_text = " " + " ".join(selected_text_base.split())
 
@@ -578,7 +615,7 @@ class TSEHeadTailDatasetV4(TSEDataset):
         labels_head[targets_start:] = 1
         row['labels_head'] = labels_head
         labels_tail = np.zeros(len(input_ids))
-        labels_tail[targets_end+1:] = 1
+        labels_tail[targets_end + 1:] = 1
         row['labels_tail'] = labels_tail
         row['offsets'] = tweet_offsets
 
@@ -640,17 +677,30 @@ class TSEHeadTailSegmentationDatasetV3(TSEHeadTailDatasetV3):
             'labels_head': torch.tensor(row['labels_head']),
             'labels_tail': torch.tensor(row['labels_tail']),
             'labels_segmentation': torch.tensor(row['labels_segmentation']),
+            'labels_single_word': torch.tensor(row['labels_single_word']),
         }
 
     def _prep_text(self, row):
         row = super()._prep_text(row)
         labels_segmentation = np.zeros(self.max_length)
+        labels_single_word = np.zeros(self.max_length)
         if row['labels_head'] >= 0 and row['labels_tail'] >= 0:
             if self.tail_index == 'natural':
                 labels_segmentation[row['labels_head']:row['labels_tail']] = 1
             elif self.tail_index == 'kernel':
-                labels_segmentation[row['labels_head']:row['labels_tail']+1] = 1
+                labels_segmentation[row['labels_head']:row['labels_tail'] + 1] = 1
         row['labels_segmentation'] = labels_segmentation
+        if self.tail_index == 'kernel':
+            if row['labels_head'] == row['labels_tail']:
+                labels_single_word[row['labels_head']] = 1
+            else:
+                labels_single_word[0] = 1
+        else:
+            if row['labels_head'] + 1 == row['labels_tail']:
+                labels_single_word[row['labels_head']] = 1
+            else:
+                labels_single_word[0] = 1
+        labels_single_word['labels_single_word'] = labels_single_word
         # pad_token = 1
         # pad_token = self.tokenizer.encode_plus(
         #     ' ' + self.tokenizer.special_tokens_map['pad_token'],
@@ -746,8 +796,8 @@ class TSEHeadTailSegmentationDatasetV5(TSEHeadTailDatasetV3):
             labels_segmentation[row['labels_head']:row['labels_tail']] = 1
             labels_segmentation_head[row['labels_head']:] = 1
             labels_segmentation_tail[row['labels_tail']:] = 1
-            labels_segmentation_head_rev[:row['labels_head']+1] = 1
-            labels_segmentation_tail_rev[:row['labels_tail']+1] = 1
+            labels_segmentation_head_rev[:row['labels_head'] + 1] = 1
+            labels_segmentation_tail_rev[:row['labels_tail'] + 1] = 1
         row['labels_segmentation'] = labels_segmentation
         row['labels_segmentation_head'] = labels_segmentation_head
         row['labels_segmentation_tail'] = labels_segmentation_tail

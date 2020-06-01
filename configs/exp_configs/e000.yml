@@ -63,6 +63,7 @@ train:
     loss_weight_type: nothing
     pseudo:
     use_dist_loss: false
+    single_word: false
 predict:
     neutral_origin: true
     head_tail_equal_handle: tail
@@ -74,5 +75,6 @@ predict:
         regex_3: false
     use_offsets: false
     tail_index: natural
+    single_word: false
 invalid_labels:
     # - ./inputs/nes_info/invalid_labels.csv
