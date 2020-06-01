@@ -1058,7 +1058,7 @@ class r002HeadTailRunner(Runner):
                 labels_single = batch['labels_single_word'].long()\
                     .to(self.device)
                 logits_single = logits[3]
-                train_loss += ce_loss(logits_single, labels_single)
+                train_loss += 2.5 * ce_loss(logits_single, labels_single)
 
             if fobj_index_diff:
                 pred_index_head = softargmax1d(logits_head)
@@ -1271,6 +1271,7 @@ class r002HeadTailRunner(Runner):
                 predicted_texts.append(text)
                 continue
             if y_pred_single is not None and y_pred_single.argmax() != 0:
+                print(tokenizer.decode([input_id[y_pred_single.argmax()]]))
                 predicted_texts.append(tokenizer.decode([input_id[y_pred_single.argmax()]]))
                 continue
             if pospro['head_tail_1']:
