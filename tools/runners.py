@@ -1055,10 +1055,10 @@ class r002HeadTailRunner(Runner):
                                           labels_segmentation)
 
             if single_word:
-                labels_segmentation = batch['labels_segmentation']\
+                labels_single = batch['labels_single_word']\
                     .to(self.device)
                 logits_single = logits[3]
-                train_loss += ce_loss(logits_single, logits_single)
+                train_loss += ce_loss(logits_single, labels_single)
 
             if fobj_index_diff:
                 pred_index_head = softargmax1d(logits_head)

@@ -677,7 +677,7 @@ class TSEHeadTailSegmentationDatasetV3(TSEHeadTailDatasetV3):
             'labels_head': torch.tensor(row['labels_head']),
             'labels_tail': torch.tensor(row['labels_tail']),
             'labels_segmentation': torch.tensor(row['labels_segmentation']),
-            'labels_single_word': torch.tensor(row['labels_single_word']).long(),
+            'labels_single_word': torch.tensor(row['labels_single_word']),
         }
 
     def _prep_text(self, row):
