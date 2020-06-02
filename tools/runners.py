@@ -1397,9 +1397,9 @@ class r002HeadTailRunner(Runner):
         for selected_text, predicted_text in zip(
                 selected_texts, predicted_texts):
             temp_jaccard += jaccard(selected_text, predicted_text)
-            # if jaccard(selected_text, predicted_text) == 0.:
-            #     print('---------------')
-            #     print(f'selected_text: {selected_text} -- predicted_text: {predicted_text}')
+            if ('.' in selected_text or '.' in predicted_text) and jaccard(selected_text, predicted_text) == 0.:
+                print('---------------')
+                print(f'selected_text: {selected_text} -- predicted_text: {predicted_text}')
 
         best_thresh = -1
         best_jaccard = temp_jaccard / len(input_ids)

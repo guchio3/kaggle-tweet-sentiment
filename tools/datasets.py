@@ -103,10 +103,8 @@ class TSEDataset(Dataset):
                 '[QUES]',
             ])
             logger.info(f'added {added_num} tokens.')
-            example = self.tokenizer.encode("[QUES]")
-            logger.info(f'ex. "[QUES]" -> {example.ids}')
-            example = self.tokenizer.encode("[S][QUES]")
-            logger.info(f'ex. "[S][QUES]" -> {example.ids}')
+            example = self.tokenizer.encode("[S][PERIOD][EXCL][QUES]")
+            logger.info(f'ex. "[S][PERIOD][EXCL][QUES]" -> {example.ids}')
 
         self.df['input_ids'] = None
         self.df['labels'] = None
@@ -465,8 +463,8 @@ class TSEHeadTailDatasetV3(TSEDataset):
             # tweet_base = re.sub('!', ' ##', tweet_base)
             tweet_base = re.sub(r' \.', '[S][PERIOD]', row['text'])
             tweet_base = re.sub(r'\.', '[PERIOD]', tweet_base)
-            # tweet_base = re.sub(' !', '[S][EXCL]', tweet_base)
-            # tweet_base = re.sub('!', '[EXCL]', tweet_base)
+            tweet_base = re.sub(' !', '[S][EXCL]', tweet_base)
+            tweet_base = re.sub('!', '[EXCL]', tweet_base)
             # tweet_base = re.sub(' \?', '[S][QUES]', tweet_base)
             # tweet_base = re.sub('\?', '[QUES]', tweet_base)
             tweet = " " + " ".join(tweet_base.split())
@@ -474,8 +472,8 @@ class TSEHeadTailDatasetV3(TSEDataset):
             # selected_text_base = re.sub('!', ' ##', selected_text_base)
             selected_text_base = re.sub(r' \.', '[S][PERIOD]', row['selected_text'])
             selected_text_base = re.sub(r'\.', '[PERIOD]', selected_text_base)
-            # selected_text_base = re.sub(' !', '[S][EXCL]', selected_text_base)
-            # selected_text_base = re.sub('!', '[EXCL]', selected_text_base)
+            selected_text_base = re.sub(' !', '[S][EXCL]', selected_text_base)
+            selected_text_base = re.sub('!', '[EXCL]', selected_text_base)
             # selected_text_base = re.sub(' \?', '[S][QUES]', selected_text_base)
             # selected_text_base = re.sub('\?', '[QUES]', selected_text_base)
             selected_text = " " + " ".join(selected_text_base.split())
@@ -533,6 +531,13 @@ class TSEHeadTailDatasetV3(TSEDataset):
             token_type_ids = token_type_ids + ([0] * padding_length)
             tweet_offsets = tweet_offsets + ([(0, 0)] * padding_length)
 
+        # for i in range(len(input_ids)):
+        #     if input_ids[i] == 50266:
+        #         input_ids[i] = 479
+        #     if input_ids[i] == 50267:
+        #         input_ids[i] = 27785
+        #     if input_ids[i] == 50268:
+        #         input_ids[i] = 17487
         row['input_ids'] = input_ids
         row['attention_mask'] = mask
         row['token_type_ids'] = token_type_ids
