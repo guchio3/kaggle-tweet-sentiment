@@ -30,7 +30,7 @@ fobj_segmentation:
     fobj_type: lovasz
 optimizer:
     optim_type: adam
-    lr: 0.00006
+    lr: 0.00005
 scheduler:
     scheduler_type: every_step
     every_step_unit: 0.5
@@ -51,9 +51,9 @@ train:
     segmentation_loss_ratios:
         - 2.5
         - 2.5
-        - 1.5
-        - 1.5
-        - 0.5
+        - 2.5
+        - 2.5
+        - 2.5
 predict:
     neutral_origin: true
     head_tail_equal_handle: larger
