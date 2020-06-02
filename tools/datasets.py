@@ -95,6 +95,19 @@ class TSEDataset(Dataset):
         #     '[positive]',
         #     '[negative]',
         # ])
+        if tokenize_period:
+            added_num = self.tokenizer.add_tokens([
+                '[S]',
+                '[PERIOD]',
+                '[EXCL]',
+                '[QUES]',
+            ])
+            logger.info(f'added {added_num} tokens.')
+            example = self.tokenizer.encode("[QUES]")
+            logger.info(f'ex. "[QUES]" -> {example.ids}')
+            example = self.tokenizer.encode("[S][QUES]")
+            logger.info(f'ex. "[S][QUES]" -> {example.ids}')
+
         self.df['input_ids'] = None
         self.df['labels'] = None
         self.df['attention_mask'] = None
@@ -448,13 +461,24 @@ class TSEHeadTailDatasetV3(TSEDataset):
         # tweet = " " + " ".join(row['text'].split()).lower()
         # selected_text = " " + " ".join(row['selected_text'].split()).lower()
         if self.tokenize_period:
-            tweet_base = re.sub(r'\.', ' %%', row['text'])
-            tweet_base = re.sub('!', ' ##', tweet_base)
+            # tweet_base = re.sub(r'\.', ' %%', row['text'])
+            # tweet_base = re.sub('!', ' ##', tweet_base)
+            tweet_base = re.sub(r' \.', '[S][PERIOD]', row['text'])
+            tweet_base = re.sub(r'\.', '[PERIOD]', tweet_base)
+            tweet_base = re.sub(' !', '[S][EXCL]', tweet_base)
+            tweet_base = re.sub('!', '[EXCL]', tweet_base)
+            tweet_base = re.sub(' \?', '[S][QUES]', tweet_base)
+            tweet_base = re.sub('\?', '[QUES]', tweet_base)
             tweet = " " + " ".join(tweet_base.split())
-            selected_text_base = re.sub(r'\.', ' %%', row['selected_text'])
-            selected_text_base = re.sub('!', ' ##', selected_text_base)
+            # selected_text_base = re.sub(r'\.', ' %%', row['selected_text'])
+            # selected_text_base = re.sub('!', ' ##', selected_text_base)
+            selected_text_base = re.sub(r' \.', '[S][PERIOD]', row['selected_text'])
+            selected_text_base = re.sub(r'\.', '[PERIOD]', selected_text_base)
+            selected_text_base = re.sub(' !', '[S][EXCL]', selected_text_base)
+            selected_text_base = re.sub('!', '[EXCL]', selected_text_base)
+            selected_text_base = re.sub(' \?', '[S][QUES]', selected_text_base)
+            selected_text_base = re.sub('\?', '[QUES]', selected_text_base)
             selected_text = " " + " ".join(selected_text_base.split())
-
         else:
             tweet = " " + " ".join(row['text'].split())
             selected_text = " " + " ".join(row['selected_text'].split())
@@ -483,8 +507,16 @@ class TSEHeadTailDatasetV3(TSEDataset):
             if sum(char_targets[offset1: offset2]) > 0:
                 target_idx.append(j)
 
-        targets_start = target_idx[0]
-        targets_end = target_idx[-1]
+        try:
+            targets_start = target_idx[0]
+            targets_end = target_idx[-1]
+        except Exception as e:
+            print(f'row: {row}')
+            print(f'tweet: {tweet}')
+            print(f'selected_text: {selected_text}')
+            print(f'target_idx: {target_idx}')
+            print(e)
+            exit(0)
 
         input_ids = [0] + sentiment_id[row['sentiment']] + \
             [2] + [2] + input_ids_orig + [2]

@@ -1271,7 +1271,6 @@ class r002HeadTailRunner(Runner):
                 predicted_texts.append(text)
                 continue
             if y_pred_single.sum() > 0.5 and y_pred_single.argmax() != 0:
-                print(tokenizer.decode([input_id[y_pred_single.argmax()]]))
                 predicted_texts.append(tokenizer.decode([input_id[y_pred_single.argmax()]]))
                 continue
             if pospro['head_tail_1']:
@@ -1309,6 +1308,13 @@ class r002HeadTailRunner(Runner):
                             pred_label_tail += 1
                     predicted_text = tokenizer.decode(
                         input_id[pred_label_head:pred_label_tail])
+                elif head_tail_equal_handle == 'larger_2':
+                    if y_pred_head.max() <= y_pred_tail.max():
+                        y_pred_head = y_pred_tail - 1
+                    else:
+                        y_pred_tail = y_pred_head + 1
+                    predicted_text = tokenizer.decode(
+                        input_id[pred_label_head:pred_label_tail])
                 else:
                     raise NotImplementedError()
             else:
@@ -1316,8 +1322,10 @@ class r002HeadTailRunner(Runner):
                     input_id[pred_label_head:pred_label_tail])
 
             if self.cfg_dataset['tokenize_period']:
-                predicted_text = re.sub(' %%', '.', predicted_text)
-                predicted_text = re.sub(' ##', '!', predicted_text)
+                predicted_text = re.sub('[S]', ' ', predicted_text)
+                predicted_text = re.sub('[PERIOD]', '.', predicted_text)
+                predicted_text = re.sub('[EXCL]', '!', predicted_text)
+                predicted_text = re.sub('[QUES]', '?', predicted_text)
 
             if pospro['req_shorten']:
                 if len(predicted_text.split()) == 1:
