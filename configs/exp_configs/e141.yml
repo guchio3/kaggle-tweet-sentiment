@@ -45,7 +45,7 @@ train:
         - 2
         - 4
         - 4
-        - 8
+        - 4
         - 8
     segmentation_loss_ratios:
         - 2.5
