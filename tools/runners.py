@@ -1322,10 +1322,10 @@ class r002HeadTailRunner(Runner):
                     input_id[pred_label_head:pred_label_tail])
 
             if self.cfg_dataset['tokenize_period']:
-                predicted_text = re.sub('[S]', ' ', predicted_text)
-                predicted_text = re.sub('[PERIOD]', '.', predicted_text)
-                predicted_text = re.sub('[EXCL]', '!', predicted_text)
-                predicted_text = re.sub('[QUES]', '?', predicted_text)
+                predicted_text = re.sub('\[S\]', ' ', predicted_text)
+                predicted_text = re.sub('\[PERIOD\]', '.', predicted_text)
+                predicted_text = re.sub('\[EXCL\]', '!', predicted_text)
+                predicted_text = re.sub('\[QUES\]', '?', predicted_text)
 
             if pospro['req_shorten']:
                 if len(predicted_text.split()) == 1:
@@ -1397,6 +1397,9 @@ class r002HeadTailRunner(Runner):
         for selected_text, predicted_text in zip(
                 selected_texts, predicted_texts):
             temp_jaccard += jaccard(selected_text, predicted_text)
+            # if jaccard(selected_text, predicted_text) == 0.:
+            #     print('---------------')
+            #     print(f'selected_text: {selected_text} -- predicted_text: {predicted_text}')
 
         best_thresh = -1
         best_jaccard = temp_jaccard / len(input_ids)
