@@ -7,6 +7,7 @@ import re
 import time
 from glob import glob
 from itertools import chain
+from transformers import RobertaForMaskedLM
 
 import numpy as np
 import pandas as pd
@@ -120,6 +121,76 @@ class Runner(object):
                 config[d_key] = d_value
             elif isinstance(d_value, dict):
                 self._fill_config_by_default_config(config[d_key], d_value)
+
+    def MLM(self):
+        # load and preprocess train.csv
+        trn_df = pd.read_csv('./inputs/datasets/w_private/tweet_sentiment_origin_merged_guchio.csv')
+        trn_df = trn_df[trn_df.text.notnull()].reset_index(drop=True)
+
+        if self.debug:
+            trn_df = trn_df.sample(self.cfg_loader['trn_batch_size'] * 3,
+                                   random_state=71)
+
+        # build loader
+        fold_trn_df = trn_df
+        trn_loader = self._build_loader(mode='train', df=fold_trn_df,
+                                        **self.cfg_loader)
+
+        model = torch.nn.DataParallel(RobertaForMaskedLM.from_pretrained('roberta-base'))
+        module = model.module
+        resized_res = module.resize_token_embeddings(
+            len(trn_loader.dataset.tokenizer))  # for sentiment
+        self.logger.info(f'resized_res: {resized_res}')
+        optimizer = self._get_optimizer(model=model, **self.cfg_optimizer)
+        scheduler = self._get_scheduler(optimizer=optimizer,
+                                        max_epoch=self.cfg_train['max_epoch'],
+                                        **self.cfg_scheduler)
+        iter_epochs = range(0, self.cfg_train['max_epoch'], 1)
+
+        self.logger.info('start trainging !')
+        for current_epoch in iter_epochs:
+            model = model.to(self.device)
+            for state in optimizer.state.values():
+                for k, v in state.items():
+                    if isinstance(v, torch.Tensor):
+                        state[k] = v.to(self.device)
+
+            if isinstance(self.cfg_train['accum_mod'], int):
+                accum_mod = self.cfg_train['accum_mod']
+            elif isinstance(self.cfg_train['accum_mod'], list):
+                accum_mod = self.cfg_train['accum_mod'][current_epoch]
+            else:
+                raise NotImplementedError('accum_mod')
+
+            running_loss = 0.
+            for batch_i, batch in enumerate(tqdm(trn_loader)):
+                mlm_input_ids = batch['mlm_input_ids']
+                mlm_labels = batch['mlm_labels']
+                attention_mask = batch['attention_mask'].to(self.device)
+                outputs = model(mlm_input_ids,
+                                masked_lm_labels=mlm_labels,
+                                attention_mask=attention_mask)
+                loss, prediction_scores = outputs[:2]
+                loss.backward()
+                running_loss += loss.item()
+
+                if (batch_i + 1) % accum_mod == 0:
+                    optimizer.step()
+                    optimizer.zero_grad()
+            trn_loss = running_loss / len(trn_loader)
+
+            self.logger.info(
+                f'epoch: {current_epoch} / '
+                + f'trn loss: {trn_loss:.5f} / '
+                + f'lr: {optimizer.param_groups[0]["lr"]:.6f} / '
+                + f'accum_mod: {accum_mod}')
+
+            model = model.to('cpu')
+            scheduler.step()
+
+        if not os.path.exists(f'./inputs/datasets/pretrain/{self.exp_id}'):
+            os.mkdir(f'./inputs/datasets/pretrain/{self.exp_id}')
+        model.module.save_pretrained(f'./inputs/datasets/pretrain/{self.exp_id}/')
 
     def train(self):
         trn_start_time = time.time()

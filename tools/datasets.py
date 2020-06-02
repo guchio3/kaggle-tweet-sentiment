@@ -531,6 +531,16 @@ class TSEHeadTailDatasetV3(TSEDataset):
             token_type_ids = token_type_ids + ([0] * padding_length)
             tweet_offsets = tweet_offsets + ([(0, 0)] * padding_length)
 
+        # for MLM
+        mlm_input_ids = np.asarray(input_ids)
+        mlm_labels = (np.ones(len(input_ids)) * -100).astype(int)
+        mask_indices = np.random.choice(np.arange(4, 4+len(input_ids_orig)), int(len(input_ids_orig) * 0.15) + 1)
+        for mask_index in mask_indices:
+            mlm_labels[mask_index] = mlm_input_ids[mask_index]
+            mlm_input_ids[mask_index] = 50264
+        row['mlm_input_ids'] = mlm_input_ids
+        row['mlm_labels'] = mlm_labels
+
         # for i in range(len(input_ids)):
         #     if input_ids[i] == 50266:
         #         input_ids[i] = 479
@@ -715,6 +725,8 @@ class TSEHeadTailSegmentationDatasetV3(TSEHeadTailDatasetV3):
             'labels_tail': torch.tensor(row['labels_tail']),
             'labels_segmentation': torch.tensor(row['labels_segmentation']),
             'labels_single_word': torch.tensor(row['labels_single_word']),
+            'mlm_input_ids': torch.tensor(row['mlm_input_ids']),
+            'mlm_labels': torch.tensor(row['mlm_labels']),
         }
 
     def _prep_text(self, row):

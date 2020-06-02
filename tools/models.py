@@ -268,15 +268,15 @@ class RobertaModelWDualMultiClassClassifierHead(nn.Module):
 
     def resize_token_embeddings(self, token_num):
         self.model.resize_token_embeddings(token_num)
-        with torch.no_grad():
-            # self.model.embeddings.word_embeddings.weight.data[37249].clone().reshape((1, -1)),
-            self.model.embeddings.word_embeddings.weight.copy_(torch.cat([
-                self.model.embeddings.word_embeddings.weight.data[:-4],
-                self.model.embeddings.word_embeddings.weight.data[37249].clone().reshape((1, -1)),
-                self.model.embeddings.word_embeddings.weight.data[479].clone().reshape((1, -1)),
-                self.model.embeddings.word_embeddings.weight.data[27785].clone().reshape((1, -1)),
-                self.model.embeddings.word_embeddings.weight.data[17487].clone().reshape((1, -1)),
-                ], dim=0))
+        # with torch.no_grad():
+        #     # self.model.embeddings.word_embeddings.weight.data[37249].clone().reshape((1, -1)),
+        #     self.model.embeddings.word_embeddings.weight.copy_(torch.cat([
+        #         self.model.embeddings.word_embeddings.weight.data[:-4],
+        #         self.model.embeddings.word_embeddings.weight.data[37249].clone().reshape((1, -1)),
+        #         self.model.embeddings.word_embeddings.weight.data[479].clone().reshape((1, -1)),
+        #         self.model.embeddings.word_embeddings.weight.data[27785].clone().reshape((1, -1)),
+        #         self.model.embeddings.word_embeddings.weight.data[17487].clone().reshape((1, -1)),
+        #         ], dim=0))
 
 
 class Conv1dSame(nn.Module):
