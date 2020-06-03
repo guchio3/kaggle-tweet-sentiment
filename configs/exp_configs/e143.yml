@@ -1,0 +1,59 @@
+description: "e133 MLM 2"
+runner: r002
+SINGLE_FOLD: false
+split:
+    split_type: abhishek5
+    split_num: 5
+    shuffle: true
+    random_state: 71
+loader:
+    trn_sampler_type: random
+    trn_batch_size: 64
+    tst_sampler_type: sequential
+    tst_batch_size: 64
+    dataset_type: tse_headtail_segmentation_dataset_v3
+dataset:
+    tokenizer_type: roberta_bytelevel_bpe
+    pretrained_model_name_or_path: ./inputs/datasets/
+    do_lower_case: true
+    add_pair_prefix_space: false
+    max_length: 130
+    tail_index: kernel
+    tokenize_period: true
+model:
+    model_type: roberta-headtail-segmentation
+    pretrained_model_name_or_path: roberta-base
+    num_output_units: 130
+fobj:
+    fobj_type: ce
+fobj_segmentation:
+    fobj_type: lovasz
+optimizer:
+    optim_type: adam
+    lr: 0.00005
+scheduler:
+    scheduler_type: cosine
+    every_step_unit: 0.5
+train:
+    max_epoch: 30
+    warmup_epoch: 0
+    thresh_unit: 0.05  # no meaning for head tail
+    rm_neutral: false
+    ema_mu: 0.9
+    ema_level: batch
+    ema_n: 1  # < 1 means no ema
+    accum_mod: 1
+    segmentation_loss_ratios:
+        - 2.5
+        - 2.5
+        - 1.5
+        - 1.5
+        - 0.5
+predict:
+    neutral_origin: true
+    head_tail_equal_handle: larger
+    pospro:
+        head_tail_1: false
+        req_shorten: false
+        regex_3: false
+    tail_index: kernel
