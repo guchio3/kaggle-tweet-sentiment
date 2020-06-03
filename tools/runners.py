@@ -1272,26 +1272,24 @@ class r002HeadTailRunner(Runner):
             valid_labels_tail = torch.cat(valid_labels_tail)
 
             if use_offsets:
-                raise NotImplementedError()
-                # best_thresh, best_jaccard = \
-                #     self._calc_jaccard_offsets(valid_texts,
-                #                                valid_offsets,
-                #                                valid_sentiments,
-                #                                valid_selected_texts,
-                #                                valid_preds_head,
-                #                                valid_preds_tail,
-                #                                self.cfg_predict['neutral_origin'],
-                #                                self.cfg_predict['head_tail_equal_handle'],
-                #                                self.cfg_predict['pospro'],
-                #                                )
+                best_thresh, best_jaccard = \
+                    self._calc_jaccard_offsets(valid_texts,
+                                               valid_offsets,
+                                               valid_sentiments,
+                                               valid_selected_texts,
+                                               valid_preds_head,
+                                               valid_preds_tail,
+                                               self.cfg_predict['neutral_origin'],
+                                               self.cfg_predict['head_tail_equal_handle'],
+                                               self.cfg_predict['pospro'],
+                                               self.cfg_predict['tail_index'],
+                                               )
             else:
                 best_thresh, best_jaccard = \
                     self._calc_jaccard(valid_texts,
                                        valid_input_ids,
                                        valid_sentiments,
                                        valid_selected_texts,
-                                       # valid_labels_head,
-                                       # valid_labels_tail,
                                        valid_preds_head,
                                        valid_preds_tail,
                                        valid_preds_single,
@@ -1480,7 +1478,9 @@ class r002HeadTailRunner(Runner):
     def _get_predicted_texts_offsets(self, texts, offsets_list, sentiments,
                                      y_preds_head, y_preds_tail,
                                      neutral_origin=False,
-                                     head_tail_equal_handle='tail'):
+                                     head_tail_equal_handle='tail',
+                                     pospro={},
+                                     tail_index='neutral'):
         predicted_texts = []
         for text, offsets, sentiment, y_pred_head, y_pred_tail \
                 in zip(texts, offsets_list, sentiments,
@@ -1489,30 +1489,50 @@ class r002HeadTailRunner(Runner):
                     or len(text.split()) < 2:
                 predicted_texts.append(text)
                 continue
-            text = ' ' + ' '.join(text.split())
+            text1 = ' ' + ' '.join(text.split())
             pred_label_head = y_pred_head.argmax()
             pred_label_tail = y_pred_tail.argmax()
+
+            if tail_index == 'kernel':
+                pred_label_tail += 1
+
             # NOTE: change here from kernel
-            if pred_label_head > pred_label_tail:
-                predicted_text = text
-                predicted_texts.append(predicted_text)
-                continue
-            elif pred_label_head == pred_label_tail:
+            if pred_label_head >= pred_label_tail:
                 if head_tail_equal_handle == 'nothing':
-                    pass
+                    raise NotImplementedError()
                 elif head_tail_equal_handle == 'head':
                     pred_label_tail = pred_label_head + 1
                 elif head_tail_equal_handle == 'tail':
                     pred_label_head = pred_label_tail - 1
+                elif head_tail_equal_handle == 'larger':
+                    while pred_label_head >= pred_label_tail:
+                        print(f'flip found, {text[:10]}...')
+                        if y_pred_head.max() <= y_pred_tail.max():
+                            # NOTE: copy にしたい
+                            y_pred_head[y_pred_head.argmax()] = 0.
+                        else:
+                            y_pred_tail[y_pred_tail.argmax()] = 0.
+                        pred_label_head = y_pred_head.argmax()
+                        pred_label_tail = y_pred_tail.argmax()
+                        if tail_index == 'kernel':
+                            pred_label_tail += 1
+                elif head_tail_equal_handle == 'larger_2':
+                    if y_pred_head.max() <= y_pred_tail.max():
+                        y_pred_head = y_pred_tail - 1
+                    else:
+                        y_pred_tail = y_pred_head + 1
                 else:
                     raise NotImplementedError()
 
-            predicted_text = ''
-            for ix in range(pred_label_head, pred_label_tail):
-                predicted_text += text[offsets[ix][0]:offsets[ix][1]]
-                if (ix + 1) < len(offsets) and \
-                        offsets[ix][1] < offsets[ix + 1][0]:
-                    predicted_text += ' '
+            # predicted_text = ''
+            # for ix in range(pred_label_head, pred_label_tail):
+            #     predicted_text += text[offsets[ix][0]:offsets[ix][1]]
+            #     if (ix + 1) < len(offsets) and \
+            #             offsets[ix][1] < offsets[ix + 1][0]:
+            #         predicted_text += ' '
+            ss = offsets[pred_label_head][0]
+            ee = offsets[pred_label_tail - 1][1]
+            predicted_text = text1[ss:ee].strip()
             predicted_texts.append(predicted_text)
 
         return predicted_texts
@@ -1521,7 +1541,10 @@ class r002HeadTailRunner(Runner):
                               sentiments, selected_texts,
                               y_preds_head, y_preds_tail,
                               neutral_origin=False,
-                              head_tail_equal_handle='tail'):
+                              head_tail_equal_handle='tail',
+                              pospro={},
+                              tail_index='neutral',
+                              ):
         temp_jaccard = 0
         predicted_texts = self._get_predicted_texts_offsets(
             texts,
@@ -1531,6 +1554,8 @@ class r002HeadTailRunner(Runner):
             y_preds_tail,
             neutral_origin,
             head_tail_equal_handle,
+            pospro,
+            tail_index
         )
         for selected_text, predicted_text in zip(
                 selected_texts, predicted_texts):
