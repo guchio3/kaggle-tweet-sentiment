@@ -1,4 +1,4 @@
-description: "e126 w/ MLM ver 2"
+description: "e133 (best w/ period) w/ longer MLM"
 runner: r002
 SINGLE_FOLD: false
 split:
@@ -17,21 +17,22 @@ dataset:
     pretrained_model_name_or_path: ./inputs/datasets/
     do_lower_case: true
     add_pair_prefix_space: false
-    max_length: 125
+    max_length: 130
     tail_index: kernel
+    tokenize_period: true
 model:
     model_type: roberta-headtail-segmentation
-    pretrained_model_name_or_path: ./inputs/datasets/pretrain/e140
-    num_output_units: 125
+    pretrained_model_name_or_path: ./inputs/datasets/pretrain/e136
+    num_output_units: 130
 fobj:
     fobj_type: ce
 fobj_segmentation:
     fobj_type: lovasz
 optimizer:
     optim_type: adam
-    lr: 0.00004
+    lr: 0.00005
 scheduler:
-    scheduler_type: pass
+    scheduler_type: every_step
     every_step_unit: 0.5
 train:
     max_epoch: 5
@@ -48,16 +49,16 @@ train:
         - 4
         - 4
     segmentation_loss_ratios:
-        - 4.0
-        - 4.0
-        - 4.0
-        - 4.0
-        - 1.0
+        - 2.5
+        - 2.5
+        - 1.5
+        - 1.5
+        - 0.5
 predict:
     neutral_origin: true
-    head_tail_equal_handle: tail
+    head_tail_equal_handle: larger
     pospro:
         head_tail_1: false
         req_shorten: false
-        regex_3: true
+        regex_3: false
     tail_index: kernel
