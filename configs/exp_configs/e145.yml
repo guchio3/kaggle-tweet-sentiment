@@ -22,7 +22,7 @@ dataset:
     tokenize_period: true
 model:
     model_type: roberta-headtail-segmentation
-    pretrained_model_name_or_path: ./inputs/datasets/pretrain/e136
+    pretrained_model_name_or_path: ./inputs/datasets/pretrain/e143
     num_output_units: 130
 fobj:
     fobj_type: ce
