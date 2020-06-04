@@ -706,8 +706,8 @@ class Runner(object):
             dataset,
             batch_size=batch_size,
             sampler=sampler,
-            # num_workers=os.cpu_count(),
-            num_workers=1,
+            num_workers=os.cpu_count(),
+            # num_workers=1,
             worker_init_fn=lambda x: np.random.seed(),
             drop_last=drop_last,
             pin_memory=True,
@@ -1570,6 +1570,10 @@ class r002HeadTailRunner(Runner):
         for selected_text, predicted_text in zip(
                 selected_texts, predicted_texts):
             temp_jaccard += jaccard(selected_text, predicted_text)
+            # if jaccard(selected_text, predicted_text) != 1.:
+            #     print('--------------')
+            #     print(f'selected_text: {selected_text}')
+            #     print(f'predicted_text: {predicted_text}')
 
         best_thresh = -1
         best_jaccard = temp_jaccard / len(texts)

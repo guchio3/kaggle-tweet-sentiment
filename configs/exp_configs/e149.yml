@@ -1,4 +1,4 @@
-description: "e126 use offset"
+description: "e148 different setting"
 runner: r002
 SINGLE_FOLD: false
 split:
@@ -30,7 +30,7 @@ fobj_segmentation:
     fobj_type: lovasz
 optimizer:
     optim_type: adam
-    lr: 0.00005
+    lr: 0.00004
 scheduler:
     scheduler_type: pass
     every_step_unit: 0.5

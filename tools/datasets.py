@@ -537,6 +537,8 @@ class TSEHeadTailDatasetV3(TSEDataset):
             if idx0 is not None and idx1 is not None:
                 for ct in range(idx0, idx1 + 1):
                     char_targets[ct] = 1
+                if self.use_magic and tweet[idx0 - 1] == ' ':
+                    char_targets[idx0 - 1] = 1
 
         tok_tweet = self.tokenizer.encode(tweet)
         input_ids_orig = tok_tweet.ids
