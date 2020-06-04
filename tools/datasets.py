@@ -51,11 +51,13 @@ class TSEDataset(Dataset):
     def __init__(self, mode, tokenizer_type, pretrained_model_name_or_path,
                  do_lower_case, max_length, df,
                  logger=None, debug=False, add_pair_prefix_space=True,
-                 tokenize_period=False, tail_index='natural'):
+                 tokenize_period=False, tail_index='natural',
+                 use_magic=False):
         self.mode = mode
         self.add_pair_prefix_space = add_pair_prefix_space
         self.tokenize_period = tokenize_period
         self.tail_index = tail_index
+        self.use_magic = use_magic
         if tokenizer_type == 'bert':
             self.tokenizer = BertTokenizer\
                 .from_pretrained(
@@ -456,6 +458,35 @@ class TSEHeadTailDatasetV3(TSEDataset):
         if 'selected_text' not in row:
             row['selected_text'] = row['text']
 
+        if self.use_magic:
+            selected_text = row['selected_text']
+            ss = row['text'].find(selected_text)
+            # selected text の前に space が 1 or 2 個あったらそれに合わせる
+            if row['text'][max(ss - 2, 0):ss] == '  ':
+                ss -= 2
+            if ss > 0 and row['text'][ss - 1] == ' ':
+                ss -= 1
+
+            ee = ss + len(selected_text)
+
+            # 文頭に空白が一つだけある場合は ee -= 1
+            # re.match は文頭から前提っぽい...？
+            if re.match(r' [^ ]', row['text']) is not None:
+                ee -= 1
+            ss = max(0, ss)
+            # selected text 以前に '  ' がある場合は
+            # selected text が 1 文字以上あり、
+            # 後ろから二番目が space である場合は sel = sel[:-2]
+            if '  ' in row['text'][:ss] and row['sentiment'] != 'neutral':
+                text1 = " ".join(row['text'].split())
+                sel = text1[ss:ee].strip()
+                if len(sel) > 1 and sel[-2] == ' ':
+                    sel = sel[:-2]
+                selected_text = sel
+            row['fixed_selected_text'] = selected_text
+        else:
+            selected_text = row['selected_text']
+
         # tweet = " " + " ".join(row['text'].split()).lower()
         # selected_text = " " + " ".join(row['selected_text'].split()).lower()
         if self.tokenize_period:
@@ -470,7 +501,7 @@ class TSEHeadTailDatasetV3(TSEDataset):
             tweet = " " + " ".join(tweet_base.split())
             # selected_text_base = re.sub(r'\.', ' %%', row['selected_text'])
             # selected_text_base = re.sub('!', ' ##', selected_text_base)
-            selected_text_base = re.sub(r' \.', '[S][PERIOD]', row['selected_text'])
+            selected_text_base = re.sub(r' \.', '[S][PERIOD]', selected_text)
             selected_text_base = re.sub(r'\.', '[PERIOD]', selected_text_base)
             selected_text_base = re.sub(' !', '[S][EXCL]', selected_text_base)
             selected_text_base = re.sub('!', '[EXCL]', selected_text_base)
@@ -479,42 +510,73 @@ class TSEHeadTailDatasetV3(TSEDataset):
             selected_text = " " + " ".join(selected_text_base.split())
         else:
             tweet = " " + " ".join(row['text'].split())
-            selected_text = " " + " ".join(row['selected_text'].split())
+            if self.use_magic:
+                selected_text = " ".join(selected_text.split())
+            else:
+                selected_text = " " + " ".join(selected_text.split())
+            # selected_text = " " + " ".join(selected_text.split())
 
-        len_st = len(selected_text) - 1
-        idx0 = None
-        idx1 = None
+        if self.use_magic:
+            idx = tweet.find(selected_text)
+            char_targets = np.zeros((len(tweet)))
+            char_targets[idx:idx+len(selected_text)] = 1
+            if tweet[idx - 1] == ' ':
+                char_targets[idx - 1] = 1
+        else:
+            len_st = len(selected_text) - 1
+            idx0 = None
+            idx1 = None
 
-        for ind in (i for i, e in enumerate(tweet) if e == selected_text[1]):
-            if " " + tweet[ind: ind + len_st] == selected_text:
-                idx0 = ind
-                idx1 = ind + len_st - 1
-                break
+            for ind in (i for i, e in enumerate(tweet) if e == selected_text[1]):
+                if " " + tweet[ind: ind + len_st] == selected_text:
+                    idx0 = ind
+                    idx1 = ind + len_st - 1
+                    break
 
-        char_targets = [0] * len(tweet)
-        if idx0 is not None and idx1 is not None:
-            for ct in range(idx0, idx1 + 1):
-                char_targets[ct] = 1
+            char_targets = [0] * len(tweet)
+            if idx0 is not None and idx1 is not None:
+                for ct in range(idx0, idx1 + 1):
+                    char_targets[ct] = 1
 
         tok_tweet = self.tokenizer.encode(tweet)
         input_ids_orig = tok_tweet.ids
         tweet_offsets = tok_tweet.offsets
 
         target_idx = []
+        best_idx, best_sm = None, -1  # NOTE: this should be 0
         for j, (offset1, offset2) in enumerate(tweet_offsets):
-            if sum(char_targets[offset1: offset2]) > 0:
-                target_idx.append(j)
+            if self.use_magic:
+                sm = np.mean(char_targets[offset1: offset2])
+                if sm > 0.5 and char_targets[offset1] != 0:
+                    target_idx.append(j)
+                if sm > best_sm:
+                    best_sm = sm
+                    best_idx = j
+            else:
+                if sum(char_targets[offset1: offset2]) > 0:
+                    target_idx.append(j)
+        # raise best_sm > 0
 
         try:
             targets_start = target_idx[0]
             targets_end = target_idx[-1]
         except Exception as e:
+            print('=========================')
+            print(f'char_targets: {char_targets}')
+            # for j, (offset1, offset2) in enumerate(tweet_offsets):
+            #     if self.use_magic:
+            #         sm = np.mean(char_targets[offset1: offset2])
+            #         print(f'sm: {sm}')
+            #         print(f'word: {tweet[offset1: offset2]}')
+            #         if sm > 0.5 and char_targets[offset1] != 0:
+            #             target_idx.append(j)
+            # print('-------------------------')
             print(f'row: {row}')
-            print(f'tweet: {tweet}')
-            print(f'selected_text: {selected_text}')
+            print(f'tweet: :{tweet}:')
+            print(f'selected_text: :{selected_text}:')
             print(f'target_idx: {target_idx}')
-            print(e)
-            exit(0)
+            targets_start = best_idx
+            targets_end = best_idx
 
         input_ids = [0] + sentiment_id[row['sentiment']] + \
             [2] + [2] + input_ids_orig + [2]
@@ -669,150 +731,6 @@ class TSEHeadTailDatasetV4(TSEDataset):
         return row
 
 
-class TSEHeadTailDatasetV5(TSEDataset):
-    '''
-    use magic
-
-    '''
-
-    def __getitem__(self, idx):
-        row = self.df.loc[idx]
-
-        if row['input_ids'] is None:
-            row = self._prep_text(row)
-            self.df.loc[idx, 'input_ids'] = row['input_ids']
-            self.df.loc[idx, 'labels'] = row['labels']
-            self.df.loc[idx, 'attention_mask'] = row['attention_mask']
-
-        return {
-            'textID': row['textID'],
-            'text': row['text'],
-            'input_ids': torch.tensor(row['input_ids']).long(),
-            'offsets': torch.tensor(row['offsets']).long(),
-            'sentiment': row['sentiment'],
-            'attention_mask': torch.tensor(row['attention_mask']).long(),
-            # 'special_tokens_mask': torch.tensor(row['special_tokens_mask']).long(),
-            'selected_text': row['selected_text'],
-            'labels_head': torch.tensor(row['labels_head']),
-            'labels_tail': torch.tensor(row['labels_tail']),
-        }
-
-    def _prep_text(self, row):
-        if self.add_pair_prefix_space:
-            sentiment_id = {
-                'positive': [1313],
-                'negative': [2430],
-                'neutral': [7974]}
-        else:
-            sentiment_id = {
-                'positive': [22173],
-                'negative': [33407],
-                'neutral': [12516]}
-
-        # this is test case
-        if 'selected_text' not in row:
-            row['selected_text'] = row['text']
-
-        # tweet = " " + " ".join(row['text'].split()).lower()
-        # selected_text = " " + " ".join(row['selected_text'].split()).lower()
-        if self.tokenize_period:
-            # tweet_base = re.sub(r'\.', ' %%', row['text'])
-            # tweet_base = re.sub('!', ' ##', tweet_base)
-            tweet_base = re.sub(r' \.', '[S][PERIOD]', row['text'])
-            tweet_base = re.sub(r'\.', '[PERIOD]', tweet_base)
-            tweet_base = re.sub(' !', '[S][EXCL]', tweet_base)
-            tweet_base = re.sub('!', '[EXCL]', tweet_base)
-            # tweet_base = re.sub(' \?', '[S][QUES]', tweet_base)
-            # tweet_base = re.sub('\?', '[QUES]', tweet_base)
-            tweet = " " + " ".join(tweet_base.split())
-            # selected_text_base = re.sub(r'\.', ' %%', row['selected_text'])
-            # selected_text_base = re.sub('!', ' ##', selected_text_base)
-            selected_text_base = re.sub(r' \.', '[S][PERIOD]', row['selected_text'])
-            selected_text_base = re.sub(r'\.', '[PERIOD]', selected_text_base)
-            selected_text_base = re.sub(' !', '[S][EXCL]', selected_text_base)
-            selected_text_base = re.sub('!', '[EXCL]', selected_text_base)
-            # selected_text_base = re.sub(' \?', '[S][QUES]', selected_text_base)
-            # selected_text_base = re.sub('\?', '[QUES]', selected_text_base)
-            selected_text = " " + " ".join(selected_text_base.split())
-        else:
-            tweet = " " + " ".join(row['text'].split())
-            selected_text = " " + " ".join(row['selected_text'].split())
-
-        len_st = len(selected_text) - 1
-        idx0 = None
-        idx1 = None
-
-        for ind in (i for i, e in enumerate(tweet) if e == selected_text[1]):
-            if " " + tweet[ind: ind + len_st] == selected_text:
-                idx0 = ind
-                idx1 = ind + len_st - 1
-                break
-
-        char_targets = [0] * len(tweet)
-        if idx0 is not None and idx1 is not None:
-            for ct in range(idx0, idx1 + 1):
-                char_targets[ct] = 1
-
-        tok_tweet = self.tokenizer.encode(tweet)
-        input_ids_orig = tok_tweet.ids
-        tweet_offsets = tok_tweet.offsets
-
-        target_idx = []
-        for j, (offset1, offset2) in enumerate(tweet_offsets):
-            if sum(char_targets[offset1: offset2]) > 0:
-                target_idx.append(j)
-
-        try:
-            targets_start = target_idx[0]
-            targets_end = target_idx[-1]
-        except Exception as e:
-            print(f'row: {row}')
-            print(f'tweet: {tweet}')
-            print(f'selected_text: {selected_text}')
-            print(f'target_idx: {target_idx}')
-            print(e)
-            exit(0)
-
-        input_ids = [0] + sentiment_id[row['sentiment']] + \
-            [2] + [2] + input_ids_orig + [2]
-        token_type_ids = [0, 0, 0, 0] + [0] * (len(input_ids_orig) + 1)
-        mask = [1] * len(token_type_ids)
-        tweet_offsets = [(0, 0)] * 4 + tweet_offsets + [(0, 0)]
-        targets_start += 4
-        targets_end += 4
-
-        padding_length = self.max_length - len(input_ids)
-        if padding_length > 0:
-            input_ids = input_ids + ([1] * padding_length)
-            mask = mask + ([0] * padding_length)
-            token_type_ids = token_type_ids + ([0] * padding_length)
-            tweet_offsets = tweet_offsets + ([(0, 0)] * padding_length)
-
-        # for MLM
-        mlm_input_ids = np.asarray(input_ids)
-        mlm_labels = (np.ones(len(input_ids)) * -100).astype(int)
-        mask_indices = np.random.choice(np.arange(4, 4+len(input_ids_orig)), int(len(input_ids_orig) * 0.15) + 1)
-        for mask_index in mask_indices:
-            mlm_labels[mask_index] = mlm_input_ids[mask_index]
-            mlm_input_ids[mask_index] = 50264
-        row['mlm_input_ids'] = mlm_input_ids
-        row['mlm_labels'] = mlm_labels
-
-        row['input_ids'] = input_ids
-        row['attention_mask'] = mask
-        row['token_type_ids'] = token_type_ids
-        row['labels_head'] = targets_start
-        if self.tail_index == 'natural':
-            row['labels_tail'] = targets_end + 1
-        elif self.tail_index == 'kernel':
-            row['labels_tail'] = targets_end
-        else:
-            raise NotImplementedError()
-        row['offsets'] = tweet_offsets
-
-        return row
-
-
 class TSEHeadTailSegmentationDataset(TSEHeadTailDataset):
 
     def __getitem__(self, idx):
@@ -945,56 +863,4 @@ class TSEHeadTailSegmentationDatasetV4(TSEHeadTailDatasetV3):
         #     max_length=1)['input_ids'][0]
         # row['labels_segmentation'][np.asarray(
         #     row['input_ids']) != pad_token] = -1
-        return row
-
-
-class TSEHeadTailSegmentationDatasetV5(TSEHeadTailDatasetV5):
-    '''
-    w/o ignore -1
-
-    '''
-
-    def __getitem__(self, idx):
-        row = self.df.loc[idx]
-
-        row = self._prep_text(row)
-
-        return {
-            'textID': row['textID'],
-            'text': row['text'],
-            'input_ids': torch.tensor(row['input_ids']),
-            'offsets': torch.tensor(row['offsets']).long(),
-            'sentiment': row['sentiment'],
-            'attention_mask': torch.tensor(row['attention_mask']),
-            'selected_text': row['selected_text'],
-            'labels_head': torch.tensor(row['labels_head']),
-            'labels_tail': torch.tensor(row['labels_tail']),
-            'labels_segmentation': torch.tensor(row['labels_segmentation']),
-            'labels_segmentation_head': torch.tensor(row['labels_segmentation_head']),
-            'labels_segmentation_tail': torch.tensor(row['labels_segmentation_tail']),
-            'labels_segmentation_head_rev': torch.tensor(row['labels_segmentation_head_rev']),
-            'labels_segmentation_tail_rev': torch.tensor(row['labels_segmentation_tail_rev']),
-        }
-
-    def _prep_text(self, row):
-        row = super()._prep_text(row)
-        labels_segmentation = np.zeros(self.max_length)
-        labels_segmentation_head = np.zeros(self.max_length)
-        labels_segmentation_tail = np.zeros(self.max_length)
-        labels_segmentation_head_rev = np.zeros(self.max_length)
-        labels_segmentation_tail_rev = np.zeros(self.max_length)
-        if row['labels_head'] >= 0 and row['labels_tail'] >= 0:
-            labels_segmentation[row['labels_head']:row['labels_tail']] = 1
-            labels_segmentation_head[row['labels_head']:] = 1
-            labels_segmentation_tail[row['labels_tail']:] = 1
-            labels_segmentation_head_rev[:row['labels_head'] + 1] = 1
-            labels_segmentation_tail_rev[:row['labels_tail'] + 1] = 1
-        row['labels_segmentation'] = labels_segmentation
-        row['labels_segmentation_head'] = labels_segmentation_head
-        row['labels_segmentation_tail'] = labels_segmentation_tail
-        row['labels_segmentation_head_rev'] = labels_segmentation_head_rev
-        row['labels_segmentation_tail_rev'] = labels_segmentation_tail_rev
-        pad_token = 1
-        row['labels_segmentation'][np.asarray(
-            row['input_ids']) == pad_token] = -1
         return row

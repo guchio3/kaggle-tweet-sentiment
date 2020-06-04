@@ -24,6 +24,7 @@ dataset:
     max_length: 125
     tokenize_period: false
     tail_index: natural
+    use_magic: false
 model:
     model_type: roberta-headtail
     pretrained_model_name_or_path: roberta-base
@@ -73,6 +74,7 @@ predict:
         regex_1: false
         regex_2: false
         regex_3: false
+        magic: false
     use_offsets: false
     tail_index: natural
     single_word: false

@@ -9,13 +9,16 @@ from tqdm import tqdm
 
 import tokenizers
 
-DIR = "some/path/"
+DIR = "./inputs/datasets/tkm/"
 
 MAX_LEN = 120
-PATH = '../input/tf-roberta/'
+# PATH = '../input/tf-roberta/'
+PATH = './inputs/datasets/roberta/tokenizer/'
 tokenizer = tokenizers.ByteLevelBPETokenizer(
-    vocab_file=PATH + 'vocab-roberta-base.json',
-    merges_file=PATH + 'merges-roberta-base.txt',
+    # vocab_file=PATH + 'vocab-roberta-base.json',
+    # merges_file=PATH + 'merges-roberta-base.txt',
+    vocab_file=PATH + 'vocab.json',
+    merges_file=PATH + 'merges.txt',
     lowercase=True,
     add_prefix_space=True
 )
@@ -109,7 +112,8 @@ def jaccard(str1, str2):
 
 def load_data():
     train = pd.read_csv(
-        '../input/tweet-sentiment-extraction/train.csv').fillna('')
+        './inputs/origin/train.csv').fillna('')
+        # './input/tweet-sentiment-extraction/train.csv').fillna('')
     print(train.head())
 
     data = proc(train)
@@ -119,7 +123,8 @@ def load_data():
 
 def main():
     train = pd.read_csv(
-        '../input/tweet-sentiment-extraction/train.csv').fillna('')
+        './inputs/origin/train.csv').fillna('')
+        # '../input/tweet-sentiment-extraction/train.csv').fillna('')
     text = train['text'].values
     selected_text = train['selected_text'].values
 
@@ -183,7 +188,7 @@ def main():
 
         all.append(sc)
     print(i, '>>>> FOLD Jaccard =', np.mean(all))
-#
-#
-# if __name__ == '__main__':
-#     # load_data()
+
+
+if __name__ == '__main__':
+    load_data()

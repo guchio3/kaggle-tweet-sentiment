@@ -20,7 +20,6 @@ from tools.datasets import (TSEHeadTailDataset, TSEHeadTailDatasetV2,
                             TSEHeadTailSegmentationDataset,
                             TSEHeadTailSegmentationDatasetV3,
                             TSEHeadTailSegmentationDatasetV4,
-                            TSEHeadTailSegmentationDatasetV5,
                             TSESegmentationDataset)
 from tools.loggers import myLogger
 from tools.losses import dist_loss, lovasz_hinge
@@ -678,11 +677,6 @@ class Runner(object):
                                                        logger=self.logger,
                                                        debug=self.debug,
                                                        **self.cfg_dataset)
-        elif dataset_type == 'tse_headtail_segmentation_dataset_v5':
-            dataset = TSEHeadTailSegmentationDatasetV5(mode=mode, df=df,
-                                                       logger=self.logger,
-                                                       debug=self.debug,
-                                                       **self.cfg_dataset)
         else:
             raise NotImplementedError()
 
@@ -712,7 +706,8 @@ class Runner(object):
             dataset,
             batch_size=batch_size,
             sampler=sampler,
-            num_workers=os.cpu_count(),
+            # num_workers=os.cpu_count(),
+            num_workers=1,
             worker_init_fn=lambda x: np.random.seed(),
             drop_last=drop_last,
             pin_memory=True,
@@ -1531,8 +1526,23 @@ class r002HeadTailRunner(Runner):
             #             offsets[ix][1] < offsets[ix + 1][0]:
             #         predicted_text += ' '
             ss = offsets[pred_label_head][0]
-            ee = offsets[pred_label_tail - 1][1]
+            ee = offsets[pred_label_tail - 1][1] + 1
             predicted_text = text1[ss:ee].strip()
+            if pospro['head_tail_1']:
+                raise NotImplementedError()
+            if pospro['req_shorten']:
+                raise NotImplementedError()
+            if pospro['regex_1']:
+                raise NotImplementedError()
+            if pospro['regex_2']:
+                raise NotImplementedError()
+            if pospro['regex_3']:
+                raise NotImplementedError()
+            if pospro['magic']:
+                ee -= text[ss:ee].strip().count('   ')
+                ee += text[ss:ee].strip().count('  ')
+                if '  ' in text[:(ss+ee) // 2]:
+                    predicted_text = text[ss:ee].strip()
             predicted_texts.append(predicted_text)
 
         return predicted_texts
