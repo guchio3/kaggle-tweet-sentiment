@@ -30,7 +30,7 @@ fobj_segmentation:
     fobj_type: lovasz
 optimizer:
     optim_type: adam
-    lr: 0.00004
+    lr: 0.00007
 scheduler:
     scheduler_type: pass
     every_step_unit: 0.5
@@ -44,7 +44,7 @@ train:
     ema_level: batch
     ema_n: 1  # < 1 means no ema
     accum_mod:
-        - 1
+        - 2
         - 2
         - 2
         - 4
