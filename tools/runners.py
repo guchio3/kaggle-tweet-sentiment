@@ -1032,6 +1032,7 @@ class r002HeadTailRunner(Runner):
                 self.cfg_predict['neutral_origin'],
                 self.cfg_predict['head_tail_equal_handle'],
                 self.cfg_predict['pospro'],
+                self.cfg_predict['tail_index'],
             )
         else:
             predicted_texts = self._get_predicted_texts(
