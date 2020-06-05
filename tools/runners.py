@@ -1363,7 +1363,7 @@ class r002HeadTailRunner(Runner):
                     while pred_label_head >= pred_label_tail:
                         print(f'flip found, {text[:10]}...')
                         if y_pred_head.max() <= y_pred_tail.max():
-                            # NOTE: copy $B$K$7$?$$(B
+                            # NOTE: copy にしたい
                             y_pred_head[y_pred_head.argmax()] = 0.
                         else:
                             y_pred_tail[y_pred_tail.argmax()] = 0.
@@ -1504,7 +1504,7 @@ class r002HeadTailRunner(Runner):
                     while pred_label_head >= pred_label_tail:
                         print(f'flip found, {text[:10]}...')
                         if y_pred_head.max() <= y_pred_tail.max():
-                            # NOTE: copy $B$K$7$?$$(B
+                            # NOTE: copy にしたい
                             y_pred_head[y_pred_head.argmax()] = 0.
                         else:
                             y_pred_tail[y_pred_tail.argmax()] = 0.
@@ -1549,10 +1549,10 @@ class r002HeadTailRunner(Runner):
                 if ss == -1:
                     raise Exception('did not find magic 2 index')
                 ee = ss + len(predicted_text)
-                # $B@hF,$N6uGrJ,8eB`(B
+                # 先頭の空白分後退
                 if text[0] == ' ':
                     ss -= 1
-                # ee $B$^$G$K$"$k#2$D0J>e$N(B +alpha $B6uGr?tJ,8eB`(B
+                # ee までにある２つ以上の +alpha 空白数分後退
                 for cnt_base in re.findall("[$^ ] +[^ ]", text[:ee]):
                     ss -= cnt_base[1:].count(' ')
                 ss = max(ss, 0)
@@ -1563,10 +1563,10 @@ class r002HeadTailRunner(Runner):
                 if ss == -1:
                     raise Exception('did not find magic 2 index')
                 ee = ss + len(predicted_text)
-                # $B@hF,$N6uGrJ,8eB`(B
+                # 先頭の空白分後退
                 if text[0] == ' ':
                     ss -= 1
-                # ee $B$^$G$K$"$k#2$D0J>e$N(B +alpha $B6uGr?tJ,8eB`(B
+                # ee までにある２つ以上の +alpha 空白数分後退
                 for cnt_base in re.findall("[$^ ] +[^ ]", text[:ee]):
                     ss -= cnt_base[1:].count(' ')
                 ss = max(ss, 0)
@@ -2058,7 +2058,7 @@ class r002HeadTailRunner(Runner):
 #             pred_label_head = y_pred_head.argmax()
 #             pred_label_tail = (
 #                 pred_label_head +
-#                 y_pred_tail).round()[0].long()   # $B;M<N8^F~(B
+#                 y_pred_tail).round()[0].long()   # 四捨五入
 #             if pred_label_head > pred_label_tail or len(text.split()) < 2 \
 #                     or pred_label_tail >= len(input_ids):
 #                 predicted_text = text
