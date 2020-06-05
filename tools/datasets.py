@@ -549,6 +549,7 @@ class TSEHeadTailDatasetV3(TSEDataset):
         for j, (offset1, offset2) in enumerate(tweet_offsets):
             if self.use_magic:
                 sm = np.mean(char_targets[offset1: offset2])
+                # if sm > 0.5:
                 if sm > 0.5 and char_targets[offset1] != 0:
                     target_idx.append(j)
                 if sm > best_sm:

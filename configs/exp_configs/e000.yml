@@ -75,6 +75,8 @@ predict:
         regex_2: false
         regex_3: false
         magic: false
+        magic_2: false
+        magic_3: false
     use_offsets: false
     tail_index: natural
     single_word: false

@@ -1544,6 +1544,34 @@ class r002HeadTailRunner(Runner):
                 ee += text[ss:ee].strip().count('  ')
                 if '  ' in text[:(ss+ee) // 2]:
                     predicted_text = text[ss:ee].strip()
+            if pospro['magic_2']:
+                ss = text.find(predicted_text)
+                if ss == -1:
+                    raise Exception('did not find magic 2 index')
+                ee = ss + len(predicted_text)
+                # 先頭の空白分後退
+                if text[0] == ' ':
+                    ss -= 1
+                # ee までにある２つ以上の +alpha 空白数分後退
+                for cnt_base in re.findall("[$^ ] +[^ ]", text[:ee]):
+                    ss -= cnt_base[1:].count(' ')
+                ss = max(ss, 0)
+                if '  ' in text[:ee]:
+                    predicted_text = text[ss:ee].strip()
+            if pospro['magic_3']:
+                ss = text.find(predicted_text)
+                if ss == -1:
+                    raise Exception('did not find magic 2 index')
+                ee = ss + len(predicted_text)
+                # 先頭の空白分後退
+                if text[0] == ' ':
+                    ss -= 1
+                # ee までにある２つ以上の +alpha 空白数分後退
+                for cnt_base in re.findall("[$^ ] +[^ ]", text[:ee]):
+                    ss -= cnt_base[1:].count(' ')
+                ss = max(ss, 0)
+                predicted_text = text[ss:ee].strip()
+
             predicted_texts.append(predicted_text)
 
         return predicted_texts
