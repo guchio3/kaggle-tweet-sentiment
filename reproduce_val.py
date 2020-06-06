@@ -63,30 +63,20 @@ if __name__ == '__main__':
     else:
         raise NotImplementedError(f'{config["runner"]} is not implemented.')
 
-    tst_df = pd.read_csv('./inputs/origin/test.csv')
+    trn_df = pd.read_csv('./inputs/datasets/abhishek_folds/train_folds.csv')
     runner = Runner(exp_id, checkpoint, device, debug, config, default_config)
     ckpts = glob(f'./checkpoints/{exp_id}/best/*.pth')
 
-    # for ckpt in ckpts:
-    #     textIDs, predicted_texts = runner.predict(
-    #         args.csv, [ckpt])
-    #     tst_df = tst_df.set_index('textID')
-    #     tst_df.loc[textIDs, 'selected_text'] = predicted_texts
-    #     tst_df = tst_df.reset_index()
-    #     tst_df['selected_text'] = tst_df.apply(reproduce_selected_text, axis=1)
-    #     if not os.path.exists(f'./inputs/nes_info/pseudo/{exp_id}'):
-    #         os.mkdir(f'./inputs/nes_info/pseudo/{exp_id}')
-    #     tst_df.to_csv(
-    #         f'./inputs/nes_info/pseudo/{exp_id}/{ckpt.split("/")[-1][:-4]}_pseudo.csv',
-    #         index=False)
-
-    # predict using all
-    textIDs, predicted_texts = runner.predict(
-        './inputs/origin/test.csv', ckpts)
-    tst_df = tst_df.set_index('textID')
-    tst_df.loc[textIDs, 'selected_text'] = predicted_texts
-    tst_df = tst_df.reset_index()
-    tst_df['selected_text'] = tst_df.apply(reproduce_selected_text, axis=1)
-    tst_df.to_csv(
-        f'./inputs/nes_info/pseudo/{exp_id}/ensembled_pseudo.csv',
+    for ckpt in ckpts:
+        fold = int(ckpt.split('_')[1])
+        fold_val_df = trn_df.query(f'kfold == {fold}').dropna()
+        fold_val_df.to_csv('./temp.csv', index=False)
+        textIDs, predicted_texts = runner.predict('./temp.csv', [ckpt])
+        trn_df = trn_df.set_index('textID')
+        trn_df.loc[textIDs, 'pred_selected_text'] = predicted_texts
+        trn_df = trn_df.reset_index()
+    if not os.path.exists(f'./inputs/nes_info/pseudo/{exp_id}'):
+        os.mkdir(f'./inputs/nes_info/reproduce_vals/{exp_id}')
+    trn_df.to_csv(
+        f'./inputs/nes_info/reproduce_vals/{exp_id}/reproduced_val.csv',
         index=False)

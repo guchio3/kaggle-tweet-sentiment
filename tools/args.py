@@ -32,6 +32,9 @@ def parse_args(logger=None):
                         help='whether or not to use debug mode',
                         action='store_true',
                         default=False)
-
+    parser.add_argument('--csv',
+                        help='csv to use for prediction',
+                        type=str,
+                        default=None)
     args = parser.parse_args()
     return args
