@@ -471,13 +471,13 @@ class TSEHeadTailDatasetV3(TSEDataset):
 
             # 文頭に空白が一つだけある場合は ee -= 1
             # re.match は文頭から前提っぽい...？
-            # if re.match(r' [^ ]', row['text']) is not None:
-            #     ee -= 1
-            if len(row['text']) > 0 and row['text'][0] == ' ':
-                front_spaces = re.findall("^ +[^ ]", row['text'])
-                ee -= front_spaces[0].count(' ')
-                for cnt_base in re.findall("[^ ]  +[^ ]", row['text'][:ee].strip()):
-                    ee -= cnt_base[2:].count(' ')
+            if re.match(r' [^ ]', row['text']) is not None:
+                ee -= 1
+            # if len(row['text']) > 0 and row['text'][0] == ' ':
+            #     front_spaces = re.findall("^ +[^ ]", row['text'])
+            #     ee -= front_spaces[0].count(' ')
+            #     for cnt_base in re.findall("[^ ]  +[^ ]", row['text'][:ee].strip()):
+            #         ee -= cnt_base[2:].count(' ')
             ss = max(0, ss)
             # selected text 以前に '  ' がある場合は
             # selected text が 1 文字以上あり、
