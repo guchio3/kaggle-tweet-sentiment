@@ -516,7 +516,7 @@ class TSEHeadTailDatasetV3(TSEDataset):
         else:
             tweet = " " + " ".join(row['text'].split())
             if self.use_magic:
-                selected_text = " ".join(selected_text.split())
+                selected_text = " ".join(selected_text.split()).lstrip(".,;:")
             else:
                 selected_text = " " + " ".join(selected_text.split())
             # selected_text = " " + " ".join(selected_text.split())

@@ -7,7 +7,6 @@ import re
 import time
 from glob import glob
 from itertools import chain
-from transformers import RobertaForMaskedLM
 
 import numpy as np
 import pandas as pd
@@ -55,6 +54,7 @@ from torch.nn import (BCELoss, BCEWithLogitsLoss, CrossEntropyLoss, MSELoss,
 from torch.utils.data import DataLoader
 from torch.utils.data.sampler import (RandomSampler, SequentialSampler,
                                       WeightedRandomSampler)
+from transformers import RobertaForMaskedLM
 
 random.seed(71)
 torch.manual_seed(71)
@@ -123,7 +123,8 @@ class Runner(object):
 
     def MLM(self):
         # load and preprocess train.csv
-        trn_df = pd.read_csv('./inputs/datasets/w_private/tweet_sentiment_origin_merged_guchio.csv')
+        trn_df = pd.read_csv(
+            './inputs/datasets/w_private/tweet_sentiment_origin_merged_guchio.csv')
         trn_df = trn_df[trn_df.text.notnull()].reset_index(drop=True)
 
         if self.debug:
@@ -135,7 +136,8 @@ class Runner(object):
         trn_loader = self._build_loader(mode='train', df=fold_trn_df,
                                         **self.cfg_loader)
 
-        model = torch.nn.DataParallel(RobertaForMaskedLM.from_pretrained('roberta-base'))
+        model = torch.nn.DataParallel(
+            RobertaForMaskedLM.from_pretrained('roberta-base'))
         module = model.module
         resized_res = module.resize_token_embeddings(
             len(trn_loader.dataset.tokenizer))  # for sentiment
@@ -189,7 +191,8 @@ class Runner(object):
 
         if not os.path.exists(f'./inputs/datasets/pretrain/{self.exp_id}'):
             os.mkdir(f'./inputs/datasets/pretrain/{self.exp_id}')
-        model.module.save_pretrained(f'./inputs/datasets/pretrain/{self.exp_id}/')
+        model.module.save_pretrained(
+            f'./inputs/datasets/pretrain/{self.exp_id}/')
 
     def train(self):
         trn_start_time = time.time()
@@ -1102,8 +1105,10 @@ class r002HeadTailRunner(Runner):
             else:
                 # train_loss = fobj(logits_head, labels_head)
                 # train_loss += fobj(logits_tail, labels_tail)
-                train_loss = self.cfg_train['head_ratio'] * fobj(logits_head, labels_head)
-                train_loss += self.cfg_train['tail_ratio'] * fobj(logits_tail, labels_tail)
+                train_loss = self.cfg_train['head_ratio'] * \
+                    fobj(logits_head, labels_head)
+                train_loss += self.cfg_train['tail_ratio'] * \
+                    fobj(logits_tail, labels_tail)
 
             if fobj_segmentation:
                 labels_segmentation = batch['labels_segmentation']\
@@ -1336,7 +1341,8 @@ class r002HeadTailRunner(Runner):
                 predicted_texts.append(text)
                 continue
             if y_pred_single.sum() > 0.5 and y_pred_single.argmax() != 0:
-                predicted_texts.append(tokenizer.decode([input_id[y_pred_single.argmax()]]))
+                predicted_texts.append(tokenizer.decode(
+                    [input_id[y_pred_single.argmax()]]))
                 continue
             if pospro['head_tail_1']:
                 pred_label_head, pred_label_tail = self.calc_best_se_indexes(
@@ -1387,10 +1393,10 @@ class r002HeadTailRunner(Runner):
                     input_id[pred_label_head:pred_label_tail])
 
             if self.cfg_dataset['tokenize_period']:
-                predicted_text = re.sub('\[S\]', ' ', predicted_text)
-                predicted_text = re.sub('\[PERIOD\]', '.', predicted_text)
-                predicted_text = re.sub('\[EXCL\]', '!', predicted_text)
-                predicted_text = re.sub('\[QUES\]', '?', predicted_text)
+                predicted_text = re.sub(r'\[S\]', ' ', predicted_text)
+                predicted_text = re.sub(r'\[PERIOD\]', '.', predicted_text)
+                predicted_text = re.sub(r'\[EXCL\]', '!', predicted_text)
+                predicted_text = re.sub(r'\[QUES\]', '?', predicted_text)
 
             if pospro['req_shorten']:
                 if len(predicted_text.split()) == 1:
@@ -1410,17 +1416,20 @@ class r002HeadTailRunner(Runner):
                 except BaseException:
                     predicted_text = predicted_text
             if pospro['regex_2']:
-                predicted_text = re.sub('^(\.+)', '.', predicted_text)
+                predicted_text = re.sub(r'^(\.+)', '.', predicted_text)
             if pospro['regex_3']:
-                predicted_text = re.sub('^(\.+)', '.', predicted_text)
+                predicted_text = re.sub(r'^(\.+)', '.', predicted_text)
                 predicted_text = re.sub('^(!+)', '!', predicted_text)
                 if len(predicted_text.split()) == 1:
-                    predicted_text = re.sub('\.\.\.\.\.\.\.$', '..', predicted_text)
-                    predicted_text = re.sub('\.\.\.\.\.\.$', '..', predicted_text)
-                    predicted_text = re.sub('\.\.\.\.\.$', '.', predicted_text)
-                    predicted_text = re.sub('\.\.\.\.$', '..', predicted_text)
-                    predicted_text = re.sub('\.\.\.$', '..', predicted_text)
-                    predicted_text = re.sub('\.\.\.$', '..', predicted_text)
+                    predicted_text = re.sub(
+                        r'\.\.\.\.\.\.\.$', '..', predicted_text)
+                    predicted_text = re.sub(
+                        r'\.\.\.\.\.\.$', '..', predicted_text)
+                    predicted_text = re.sub(
+                        r'\.\.\.\.\.$', '.', predicted_text)
+                    predicted_text = re.sub(r'\.\.\.\.$', '..', predicted_text)
+                    predicted_text = re.sub(r'\.\.\.$', '..', predicted_text)
+                    predicted_text = re.sub(r'\.\.\.$', '..', predicted_text)
                     predicted_text = re.sub('!!!!!!!!$', '!', predicted_text)
                     predicted_text = re.sub('!!!!!$', '!', predicted_text)
                     predicted_text = re.sub('!!!!$', '!', predicted_text)
@@ -1462,9 +1471,11 @@ class r002HeadTailRunner(Runner):
         for selected_text, predicted_text in zip(
                 selected_texts, predicted_texts):
             temp_jaccard += jaccard(selected_text, predicted_text)
-            if ('.' in selected_text or '.' in predicted_text) and jaccard(selected_text, predicted_text) == 0.:
+            if ('.' in selected_text or '.' in predicted_text) and jaccard(
+                    selected_text, predicted_text) == 0.:
                 print('---------------')
-                print(f'selected_text: {selected_text} -- predicted_text: {predicted_text}')
+                print(
+                    f'selected_text: {selected_text} -- predicted_text: {predicted_text}')
 
         best_thresh = -1
         best_jaccard = temp_jaccard / len(input_ids)
@@ -1543,15 +1554,18 @@ class r002HeadTailRunner(Runner):
                 ee += 1
                 ee -= text[ss:ee].strip().count('   ')
                 ee += text[ss:ee].strip().count('  ')
-                if '  ' in text[:(ss+ee) // 2]:
+                if '  ' in text[:(ss + ee) // 2]:
                     predicted_text = text[ss:ee].strip()
             if pospro['magic_2']:
-                tmp = re.sub(r"([\\\*\+\.\?\{\}\(\)\[\]\^\$\|])", r"\\\g<0>", predicted_text)
+                tmp = re.sub(
+                    r"([\\\*\+\.\?\{\}\(\)\[\]\^\$\|])",
+                    r"\\\g<0>",
+                    predicted_text)
                 tmp = re.sub(r" ", " +", tmp)
                 m = re.search(tmp, text)
                 ss = m.start()
                 ee = m.end()
-                if '  ' in text[:(ss+ee)//2]:
+                if '  ' in text[:(ss + ee) // 2]:
                     ss = offsets[pred_label_head][0]
                     ee = offsets[pred_label_tail - 1][1] + 1
                     ee += text[ss:ee].strip().count('   ')
@@ -1563,17 +1577,21 @@ class r002HeadTailRunner(Runner):
                         ss -= 1
                 predicted_text = text[ss:ee].strip()
             if pospro['magic_3']:
-                tmp = re.sub(r"([\\\*\+\.\?\{\}\(\)\[\]\^\$\|])", r"\\\g<0>", predicted_text)
+                tmp = re.sub(
+                    r"([\\\*\+\.\?\{\}\(\)\[\]\^\$\|])",
+                    r"\\\g<0>",
+                    predicted_text)
                 tmp = re.sub(r" ", " +", tmp)
                 m = re.search(tmp, text)
                 ss = m.start()
                 ee = m.end()
-                if '  ' in text[:(ss+ee)//2]:
+                if '  ' in text[:(ss + ee) // 2]:
                     ss = offsets[pred_label_head][0]
                     ee = offsets[pred_label_tail - 1][1] + 1
                     ee += text[ss:ee].strip().count('   ')
                     predicted_text = text[ss:ee].strip()
-                    predicted_text = re.sub(r' .$', '', predicted_text).strip('`')
+                    predicted_text = re.sub(
+                        r' .$', '', predicted_text).strip('`')
                 else:
                     ee += 1
                     # 先頭の空白分後退
@@ -1583,28 +1601,28 @@ class r002HeadTailRunner(Runner):
             if pospro['magic_4']:
                 text0 = text.replace('\t', '')
 
-                text1 = " " + " ".join(text.split())
-
                 st = text1[ss:ee].strip()
 
-                tmp = re.sub(r"([\\\*\+\.\?\{\}\(\)\[\]\^\$\|])", r"\\\g<0>", st)
+                tmp = re.sub(
+                    r"([\\\*\+\.\?\{\}\(\)\[\]\^\$\|])",
+                    r"\\\g<0>",
+                    st)
                 tmp = re.sub(r" ", " +", tmp)
                 m = re.search(tmp, text0)
                 ss2 = m.start()
                 ee2 = m.end() + 1
-                
+
                 ee += 1
                 ee += text0[ss:ee].strip().count('   ')
 
                 st1 = text0[ss:ee].strip(' ½')
 
-                ee2 += 1
                 # 先頭の空白分後退
                 if text0[0] == ' ':
                     ss2 -= 1
                 st2 = text0[ss2:ee2].strip(' ½')
 
-                if '  ' in text0[:(ss2+ee2)//2] and 'neutral' != sentiment:
+                if '  ' in text0[:(ss2 + ee2) // 2] and 'neutral' != sentiment:
                     st = st1
                 else:
                     st = st2
@@ -2118,8 +2136,8 @@ class r002HeadTailRunner(Runner):
 #             predicted_texts.append(predicted_text)
 #
 #         return predicted_texts
-# 
-# 
+#
+#
 # class r005HeadTailRunner(r002HeadTailRunner):
 #     def _train_loop(self, model, optimizer, fobj,
 #                     loader, warmup_batch, ema, accum_mod, use_specical_mask,
@@ -2127,32 +2145,32 @@ class r002HeadTailRunner(Runner):
 #                     loss_weight_type, fobj_index_diff):
 #         model.train()
 #         running_loss = 0
-# 
+#
 #         softargmax1d = SoftArgmax1D(
 #             beta=5., device=self.device).to(
 #             self.device)
-# 
+#
 #         for batch_i, batch in enumerate(tqdm(loader)):
 #             if warmup_batch > 0:
 #                 self._warmup(batch_i, warmup_batch, model)
-# 
+#
 #             input_ids = batch['input_ids'].to(self.device)
 #             labels_head = batch['labels_head'].to(self.device)
 #             labels_tail = batch['labels_tail'].to(self.device)
 #             attention_mask = batch['attention_mask'].to(self.device)
 #             special_tokens_mask = batch['special_tokens_mask'].to(self.device) \
 #                 if use_specical_mask else None
-# 
+#
 #             (logits, ) = model(
 #                 input_ids=input_ids,
 #                 attention_mask=attention_mask,
 #                 special_tokens_mask=special_tokens_mask,
 #             )
-# 
+#
 #             # 5 is temerature
 #             logits_head = logits[0]
 #             logits_tail = logits[1]
-# 
+#
 #             if loss_weight_type == 'sel_len':
 #                 sel_len_weight = 1. * (
 #                     1. / (labels_tail - labels_head).float())
@@ -2171,7 +2189,7 @@ class r002HeadTailRunner(Runner):
 #             else:
 #                 train_loss = self.cfg_train['head_ratio'] * fobj(logits_head, labels_head)
 #                 train_loss += self.cfg_train['tail_ratio'] * fobj(logits_tail, labels_tail)
-# 
+#
 #             if fobj_segmentation:
 #                 labels_segmentation_head = batch['labels_segmentation_head']\
 #                     .to(self.device)
@@ -2185,7 +2203,7 @@ class r002HeadTailRunner(Runner):
 #                 logits_segmentation_tail = logits[3]
 #                 # logits_segmentation_head_rev = logits[4]
 #                 # logits_segmentation_tail_rev = logits[5]
-# 
+#
 #                 if self.cfg_fobj_segmentation['fobj_type'] == 'lovasz':
 #                     # train_loss = segmentation_loss_ratio * \
 #                     train_loss += segmentation_loss_ratio * \
@@ -2206,7 +2224,7 @@ class r002HeadTailRunner(Runner):
 #                     #                       ignore=-1)
 #                 else:
 #                     raise NotImplementedError()
-# 
+#
 #             if fobj_index_diff:
 #                 pred_index_head = softargmax1d(logits_head)
 #                 pred_index_tail = softargmax1d(logits_tail)
@@ -2218,17 +2236,17 @@ class r002HeadTailRunner(Runner):
 #                 #                                       labels_head.float())
 #                 # train_loss += 0.003 * fobj_index_diff(pred_index_tail,
 #                 #                                       labels_tail.float())
-# 
+#
 #             train_loss.backward()
-# 
+#
 #             running_loss += train_loss.item()
-# 
+#
 #             if (batch_i + 1) % accum_mod == 0:
 #                 optimizer.step()
 #                 optimizer.zero_grad()
-# 
+#
 #                 ema.on_batch_end(model)
-# 
+#
 #         train_loss = running_loss / len(loader)
-# 
+#
 #         return train_loss
