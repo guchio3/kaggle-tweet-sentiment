@@ -283,7 +283,16 @@ class Runner(object):
             #         '696ad06f3c',
             #         '24d37f9ba7',
             #         ]
-            # fold_trn_df = fold_trn_df.query(f'textID not in {invalid_textIDs}')
+            invalid_textIDs = [
+                    '4c279acff6',
+                    '96ff964db0',
+                    'eaf2942ee8',
+                    '12f21c8f19',
+                    '09d0f8f088',
+                    '3a906c871f',
+                    '780c673bca',
+                    ]
+            fold_trn_df = fold_trn_df.query(f'textID not in {invalid_textIDs}')
 
             trn_loader = self._build_loader(mode='train', df=fold_trn_df,
                                             **self.cfg_loader)
