@@ -1580,6 +1580,36 @@ class r002HeadTailRunner(Runner):
                     if text[0] == ' ':
                         ss -= 1
                 predicted_text = text[ss:ee].strip()
+            if pospro['magic_4']:
+                text0 = text.replace('\t', '')
+
+                text1 = " " + " ".join(text.split())
+
+                st = text1[ss:ee].strip()
+
+                tmp = re.sub(r"([\\\*\+\.\?\{\}\(\)\[\]\^\$\|])", r"\\\g<0>", st)
+                tmp = re.sub(r" ", " +", tmp)
+                m = re.search(tmp, text0)
+                ss2 = m.start()
+                ee2 = m.end() + 1
+                
+                ee += 1
+                ee += text0[ss:ee].strip().count('   ')
+
+                st1 = text0[ss:ee].strip(' ½')
+
+                ee2 += 1
+                # 先頭の空白分後退
+                if text0[0] == ' ':
+                    ss2 -= 1
+                st2 = text0[ss2:ee2].strip(' ½')
+
+                if '  ' in text0[:(ss2+ee2)//2] and 'neutral' != sentiment:
+                    st = st1
+                else:
+                    st = st2
+
+                predicted_text = st
 
             predicted_texts.append(predicted_text)
 
