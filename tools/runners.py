@@ -1074,8 +1074,8 @@ class r002HeadTailRunner(Runner):
                 char_preds_head, char_preds_tail = np.zeros(141), np.zeros(141)
                 char_preds_head[offset_i[0]:offset_i[1]] = pred_head_i
                 char_preds_tail[offset_i[0]:offset_i[1]] = pred_tail_i
-                char_preds_heads.append(char_preds_head)
-                char_preds_tails.append(char_preds_tail)
+            char_preds_heads.append(char_preds_head)
+            char_preds_tails.append(char_preds_tail)
         char_preds_heads, char_preds_tails = np.asarray(char_preds_heads), np.asarray(char_preds_tails)
         return char_preds_heads, char_preds_tails
 
