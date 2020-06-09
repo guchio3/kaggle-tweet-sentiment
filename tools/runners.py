@@ -2,6 +2,7 @@ import copy
 import datetime
 import itertools
 import os
+import gc
 import random
 import re
 import time
@@ -1079,7 +1080,7 @@ class r002HeadTailRunner(Runner):
         return char_preds_heads, char_preds_tails
 
     def predict_proba(self, tst_df, checkpoints):
-        fold_test_char_preds_heads, fold_test_char_preds_tails = [], []
+        avg_test_char_preds_head, avg_test_char_preds_tail = None, None
         for checkpoint in checkpoints:
             # load and preprocess train.csv
             if self.cfg_invalid_labels:
@@ -1121,13 +1122,22 @@ class r002HeadTailRunner(Runner):
 
             test_char_preds_head, test_char_preds_tail = self._mk_char_preds(test_offsets, test_preds_head, test_preds_tail)
 
-            fold_test_char_preds_heads.append(test_char_preds_head)
-            fold_test_char_preds_tails.append(test_char_preds_tail)
+            if avg_test_char_preds_head is None:
+                avg_test_char_preds_head = test_char_preds_head / len(checkpoints)
+            else:
+                avg_test_char_preds_head += test_char_preds_head / len(checkpoints)
+            if avg_test_char_preds_tail is None:
+                avg_test_char_preds_tail = test_char_preds_tail / len(checkpoints)
+            else:
+                avg_test_char_preds_tail += test_char_preds_tail / len(checkpoints)
 
-        avg_test_char_preds_head = np.mean(
-            np.stack(fold_test_char_preds_heads), axis=0)
-        avg_test_char_preds_tail = np.mean(
-            np.stack(fold_test_char_preds_tails), axis=0)
+            del checkpoint, test_char_preds_head, test_char_preds_tail
+            gc.collect()
+
+        # avg_test_char_preds_head = np.mean(
+        #     np.stack(fold_test_char_preds_heads), axis=0)
+        # avg_test_char_preds_tail = np.mean(
+        #     np.stack(fold_test_char_preds_tails), axis=0)
         # if use_offsets:
         #     predicted_texts = self._get_predicted_texts_offsets(
         #         test_texts,
