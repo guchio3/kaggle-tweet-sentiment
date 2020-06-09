@@ -1070,7 +1070,7 @@ class r002HeadTailRunner(Runner):
         char_preds_heads, char_preds_tails = [], []
         # 最初の４つは無視
         for offset, pred_head, pred_tail in tqdm(zip(offsets[4:], preds_head[4:], preds_tail[4:])):
-            for offset_i, pred_head_i, pred_tail_i in tqdm(zip(offset, pred_head, pred_tail)):
+            for offset_i, pred_head_i, pred_tail_i in zip(offset, pred_head, pred_tail):
                 char_preds_head, char_preds_tail = np.zeros(141), np.zeros(141)
                 char_preds_head[offset_i[0]:offset_i[1]] = pred_head_i
                 char_preds_tail[offset_i[0]:offset_i[1]] = pred_tail_i
