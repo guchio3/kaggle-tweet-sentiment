@@ -11,7 +11,7 @@ from itertools import chain
 
 import numpy as np
 import pandas as pd
-from tqdm import tqdm
+from tqdm.auto import tqdm
 
 import torch
 import torch.optim as optim
