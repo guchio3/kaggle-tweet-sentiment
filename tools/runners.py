@@ -1068,8 +1068,8 @@ class r002HeadTailRunner(Runner):
     def _mk_char_preds(self, offsets, preds_head, preds_tail):
         char_preds_heads, char_preds_tails = [], []
         # 最初の４つは無視
-        for offset, pred_head, pred_tail in zip(offsets[4:], preds_head[4:], preds_tail[4:]):
-            for offset_i, pred_head_i, pred_tail_i in zip(offset, pred_head, pred_tail):
+        for offset, pred_head, pred_tail in tqdm(zip(offsets[4:], preds_head[4:], preds_tail[4:])):
+            for offset_i, pred_head_i, pred_tail_i in tqdm(zip(offset, pred_head, pred_tail)):
                 char_preds_head, char_preds_tail = np.zeros(141), np.zeros(141)
                 char_preds_head[offset_i[0]:offset_i[1]] = pred_head_i
                 char_preds_tail[offset_i[0]:offset_i[1]] = pred_tail_i
@@ -1124,10 +1124,10 @@ class r002HeadTailRunner(Runner):
             fold_test_char_preds_heads.append(test_char_preds_head)
             fold_test_char_preds_tails.append(test_char_preds_tail)
 
-        avg_test_char_preds_head = torch.mean(
-            torch.stack(fold_test_char_preds_heads), dim=0)
-        avg_test_char_preds_tail = torch.mean(
-            torch.stack(fold_test_char_preds_tails), dim=0)
+        avg_test_char_preds_head = np.mean(
+            np.stack(fold_test_char_preds_heads), axis=0)
+        avg_test_char_preds_tail = np.mean(
+            np.stack(fold_test_char_preds_tails), axis=0)
         # if use_offsets:
         #     predicted_texts = self._get_predicted_texts_offsets(
         #         test_texts,
