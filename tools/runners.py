@@ -7,7 +7,6 @@ import re
 import time
 from glob import glob
 from itertools import chain
-from transformers import RobertaForMaskedLM
 
 import numpy as np
 import pandas as pd
@@ -55,6 +54,7 @@ from torch.nn import (BCELoss, BCEWithLogitsLoss, CrossEntropyLoss, MSELoss,
 from torch.utils.data import DataLoader
 from torch.utils.data.sampler import (RandomSampler, SequentialSampler,
                                       WeightedRandomSampler)
+from transformers import RobertaForMaskedLM
 
 random.seed(71)
 torch.manual_seed(71)
@@ -123,7 +123,8 @@ class Runner(object):
 
     def MLM(self):
         # load and preprocess train.csv
-        trn_df = pd.read_csv('./inputs/datasets/w_private/tweet_sentiment_origin_merged_guchio.csv')
+        trn_df = pd.read_csv(
+            './inputs/datasets/w_private/tweet_sentiment_origin_merged_guchio.csv')
         trn_df = trn_df[trn_df.text.notnull()].reset_index(drop=True)
 
         if self.debug:
@@ -135,7 +136,8 @@ class Runner(object):
         trn_loader = self._build_loader(mode='train', df=fold_trn_df,
                                         **self.cfg_loader)
 
-        model = torch.nn.DataParallel(RobertaForMaskedLM.from_pretrained('roberta-base'))
+        model = torch.nn.DataParallel(
+            RobertaForMaskedLM.from_pretrained('roberta-base'))
         module = model.module
         resized_res = module.resize_token_embeddings(
             len(trn_loader.dataset.tokenizer))  # for sentiment
@@ -189,7 +191,8 @@ class Runner(object):
 
         if not os.path.exists(f'./inputs/datasets/pretrain/{self.exp_id}'):
             os.mkdir(f'./inputs/datasets/pretrain/{self.exp_id}')
-        model.module.save_pretrained(f'./inputs/datasets/pretrain/{self.exp_id}/')
+        model.module.save_pretrained(
+            f'./inputs/datasets/pretrain/{self.exp_id}/')
 
     def train(self):
         trn_start_time = time.time()
@@ -252,6 +255,18 @@ class Runner(object):
                 fold_trn_df = pd.concat([fold_trn_df,
                                          pd.read_csv(self.cfg_train['pseudo'][fold_num])],
                                         axis=0).reset_index(drop=True)
+
+            invalid_text_ids = [
+                '4c279acff6',
+                '96ff964db0',
+                'eaf2942ee8',
+                '12f21c8f19',
+                '09d0f8f088',
+                '3a906c871f',
+                '780c673bca',
+            ]
+            fold_trn_df = fold_trn_df.query(
+                f'textID not in {invalid_text_ids}')
 
             trn_loader = self._build_loader(mode='train', df=fold_trn_df,
                                             **self.cfg_loader)
@@ -1050,6 +1065,99 @@ class r002HeadTailRunner(Runner):
 
         return textIDs, predicted_texts
 
+    def _mk_char_preds(self, offsets, preds_head, preds_tail):
+        char_preds_heads, char_preds_tails = [], []
+        # 最初の４つは無視
+        for offset, pred_head, pred_tail in zip(offsets[4:], preds_head[4:], preds_tail[4:]):
+            for offset_i, pred_head_i, pred_tail_i in zip(offset, pred_head, pred_tail):
+                char_preds_head, char_preds_tail = np.zeros(141), np.zeros(141)
+                char_preds_head[offset_i[0]:offset_i[1]] = pred_head_i
+                char_preds_tail[offset_i[0]:offset_i[1]] = pred_tail_i
+                char_preds_heads.append(char_preds_head)
+                char_preds_tails.append(char_preds_tail)
+        char_preds_heads, char_preds_tails = np.asarray(char_preds_heads), np.asarray(char_preds_tails)
+        return char_preds_heads, char_preds_tails
+
+    def predict_proba(self, tst_df, checkpoints):
+        fold_test_char_preds_heads, fold_test_char_preds_tails = [], []
+        for checkpoint in checkpoints:
+            # load and preprocess train.csv
+            if self.cfg_invalid_labels:
+                tst_df = tst_df.set_index('textID')
+                for invalid_label_csv in self.cfg_invalid_labels:
+                    invalid_label_df = pd.read_csv(invalid_label_csv)
+                    for i, row in invalid_label_df.iterrows():
+                        tst_df.loc[row['textID'], 'selected_text'] = \
+                            row['guchio_selected_text']
+                tst_df = tst_df.reset_index()
+
+            # load and apply checkpoint if needed
+            if checkpoint:
+                checkpoint = torch.load(checkpoint)
+            else:
+                raise Exception('predict needs checkpoint')
+
+            tst_loader = self._build_loader(mode='test', df=tst_df,
+                                            **self.cfg_loader)
+
+            # build model and related objects
+            # these objects have state
+            model = self._get_model(**self.cfg_model)
+            module = model if self.device == 'cpu' else model.module
+            module.resize_token_embeddings(
+                len(tst_loader.dataset.tokenizer))  # for sentiment
+
+            if checkpoint:
+                module.load_state_dict(checkpoint['model_state_dict'])
+
+            model = model.to(self.device)
+
+            use_special_mask = self.cfg_train['use_special_mask']
+            use_offsets = self.cfg_predict['use_offsets']
+            textIDs, test_texts, test_input_ids, test_offsets, \
+                test_sentiments, test_preds_head, test_preds_tail\
+                = self._test_loop(model, tst_loader,
+                                  use_special_mask, use_offsets)
+
+            test_char_preds_head, test_char_preds_tail = self._mk_char_preds(test_offsets, test_preds_head, test_preds_tail)
+
+            fold_test_char_preds_heads.append(test_char_preds_head)
+            fold_test_char_preds_tails.append(test_char_preds_tail)
+
+        avg_test_char_preds_head = torch.mean(
+            torch.stack(fold_test_char_preds_heads), dim=0)
+        avg_test_char_preds_tail = torch.mean(
+            torch.stack(fold_test_char_preds_tails), dim=0)
+        # if use_offsets:
+        #     predicted_texts = self._get_predicted_texts_offsets(
+        #         test_texts,
+        #         test_offsets,
+        #         test_sentiments,
+        #         avg_test_preds_head,
+        #         avg_test_preds_tail,
+        #         self.cfg_predict['neutral_origin'],
+        #         self.cfg_predict['head_tail_equal_handle'],
+        #         self.cfg_predict['pospro'],
+        #         self.cfg_predict['tail_index'],
+        #     )
+        # else:
+        #     predicted_texts = self._get_predicted_texts(
+        #         test_texts,
+        #         test_input_ids,
+        #         test_sentiments,
+        #         avg_test_preds_head,
+        #         avg_test_preds_tail,
+        #         tst_loader.dataset.tokenizer,
+        #         self.cfg_predict['neutral_origin'],
+        #         self.cfg_predict['head_tail_equal_handle'],
+        #         self.cfg_predict['pospro'],
+        #         self.cfg_predict['tail_index']
+        #     )
+
+        return (avg_test_char_preds_head, avg_test_char_preds_tail)
+
+
+
     def _train_loop(self, model, optimizer, fobj,
                     loader, warmup_batch, ema, accum_mod, use_specical_mask,
                     fobj_segmentation, segmentation_loss_ratio,
@@ -1102,8 +1210,10 @@ class r002HeadTailRunner(Runner):
             else:
                 # train_loss = fobj(logits_head, labels_head)
                 # train_loss += fobj(logits_tail, labels_tail)
-                train_loss = self.cfg_train['head_ratio'] * fobj(logits_head, labels_head)
-                train_loss += self.cfg_train['tail_ratio'] * fobj(logits_tail, labels_tail)
+                train_loss = self.cfg_train['head_ratio'] * \
+                    fobj(logits_head, labels_head)
+                train_loss += self.cfg_train['tail_ratio'] * \
+                    fobj(logits_tail, labels_tail)
 
             if fobj_segmentation:
                 labels_segmentation = batch['labels_segmentation']\
@@ -1336,7 +1446,8 @@ class r002HeadTailRunner(Runner):
                 predicted_texts.append(text)
                 continue
             if y_pred_single.sum() > 0.5 and y_pred_single.argmax() != 0:
-                predicted_texts.append(tokenizer.decode([input_id[y_pred_single.argmax()]]))
+                predicted_texts.append(tokenizer.decode(
+                    [input_id[y_pred_single.argmax()]]))
                 continue
             if pospro['head_tail_1']:
                 pred_label_head, pred_label_tail = self.calc_best_se_indexes(
@@ -1363,7 +1474,7 @@ class r002HeadTailRunner(Runner):
                     while pred_label_head >= pred_label_tail:
                         print(f'flip found, {text[:10]}...')
                         if y_pred_head.max() <= y_pred_tail.max():
-                            # NOTE: copy $B$K$7$?$$(B
+                            # NOTE: copy にしたい
                             y_pred_head[y_pred_head.argmax()] = 0.
                         else:
                             y_pred_tail[y_pred_tail.argmax()] = 0.
@@ -1387,10 +1498,10 @@ class r002HeadTailRunner(Runner):
                     input_id[pred_label_head:pred_label_tail])
 
             if self.cfg_dataset['tokenize_period']:
-                predicted_text = re.sub('\[S\]', ' ', predicted_text)
-                predicted_text = re.sub('\[PERIOD\]', '.', predicted_text)
-                predicted_text = re.sub('\[EXCL\]', '!', predicted_text)
-                predicted_text = re.sub('\[QUES\]', '?', predicted_text)
+                predicted_text = re.sub(r'\[S\]', ' ', predicted_text)
+                predicted_text = re.sub(r'\[PERIOD\]', '.', predicted_text)
+                predicted_text = re.sub(r'\[EXCL\]', '!', predicted_text)
+                predicted_text = re.sub(r'\[QUES\]', '?', predicted_text)
 
             if pospro['req_shorten']:
                 if len(predicted_text.split()) == 1:
@@ -1410,17 +1521,20 @@ class r002HeadTailRunner(Runner):
                 except BaseException:
                     predicted_text = predicted_text
             if pospro['regex_2']:
-                predicted_text = re.sub('^(\.+)', '.', predicted_text)
+                predicted_text = re.sub(r'^(\.+)', '.', predicted_text)
             if pospro['regex_3']:
-                predicted_text = re.sub('^(\.+)', '.', predicted_text)
+                predicted_text = re.sub(r'^(\.+)', '.', predicted_text)
                 predicted_text = re.sub('^(!+)', '!', predicted_text)
                 if len(predicted_text.split()) == 1:
-                    predicted_text = re.sub('\.\.\.\.\.\.\.$', '..', predicted_text)
-                    predicted_text = re.sub('\.\.\.\.\.\.$', '..', predicted_text)
-                    predicted_text = re.sub('\.\.\.\.\.$', '.', predicted_text)
-                    predicted_text = re.sub('\.\.\.\.$', '..', predicted_text)
-                    predicted_text = re.sub('\.\.\.$', '..', predicted_text)
-                    predicted_text = re.sub('\.\.\.$', '..', predicted_text)
+                    predicted_text = re.sub(
+                        r'\.\.\.\.\.\.\.$', '..', predicted_text)
+                    predicted_text = re.sub(
+                        r'\.\.\.\.\.\.$', '..', predicted_text)
+                    predicted_text = re.sub(
+                        r'\.\.\.\.\.$', '.', predicted_text)
+                    predicted_text = re.sub(r'\.\.\.\.$', '..', predicted_text)
+                    predicted_text = re.sub(r'\.\.\.$', '..', predicted_text)
+                    predicted_text = re.sub(r'\.\.\.$', '..', predicted_text)
                     predicted_text = re.sub('!!!!!!!!$', '!', predicted_text)
                     predicted_text = re.sub('!!!!!$', '!', predicted_text)
                     predicted_text = re.sub('!!!!$', '!', predicted_text)
@@ -1462,14 +1576,47 @@ class r002HeadTailRunner(Runner):
         for selected_text, predicted_text in zip(
                 selected_texts, predicted_texts):
             temp_jaccard += jaccard(selected_text, predicted_text)
-            if ('.' in selected_text or '.' in predicted_text) and jaccard(selected_text, predicted_text) == 0.:
+            if ('.' in selected_text or '.' in predicted_text) and jaccard(
+                    selected_text, predicted_text) == 0.:
                 print('---------------')
-                print(f'selected_text: {selected_text} -- predicted_text: {predicted_text}')
+                print(
+                    f'selected_text: {selected_text} -- predicted_text: {predicted_text}')
 
         best_thresh = -1
         best_jaccard = temp_jaccard / len(input_ids)
 
         return best_thresh, best_jaccard
+
+    def modify_punc_length(self, text, selected_text):
+        last_char_punc = True  # とりあえず探索
+        x = -1  # 末尾から探す
+        while last_char_punc:
+            if abs(x) > len(selected_text):
+                self.logger.warn(
+                    f'x is longer than selected_text, {x}: {selected_text}')
+                return selected_text
+            if selected_text[x] not in ("!", ".", "?"):
+                last_char_punc = False
+                break
+            else:
+                x -= 1
+        conti_punc = abs(x) - 1  # 末尾から連続する数
+        if conti_punc >= 3:
+            selected_text = selected_text[:-(conti_punc - 2)]
+        elif conti_punc == 2:
+            pass  # 何もしなくていい
+        elif conti_punc == 1:  # 元のtextを探しに行く
+            f_idx0 = text.find(selected_text)
+            f_idx1 = f_idx0 + len(selected_text) - 1
+            if f_idx1 + 1 == len(text):
+                pass
+            else:
+                if text[f_idx1 + 1] in ("!", ".", "?"):
+                    f_idx1 += 1
+                selected_text = text[f_idx0:f_idx1 + 1]
+        else:
+            pass
+        return selected_text
 
     def _get_predicted_texts_offsets(self, texts, offsets_list, sentiments,
                                      y_preds_head, y_preds_tail,
@@ -1504,7 +1651,7 @@ class r002HeadTailRunner(Runner):
                     while pred_label_head >= pred_label_tail:
                         print(f'flip found, {text[:10]}...')
                         if y_pred_head.max() <= y_pred_tail.max():
-                            # NOTE: copy $B$K$7$?$$(B
+                            # NOTE: copy にしたい
                             y_pred_head[y_pred_head.argmax()] = 0.
                         else:
                             y_pred_tail[y_pred_tail.argmax()] = 0.
@@ -1527,7 +1674,7 @@ class r002HeadTailRunner(Runner):
             #             offsets[ix][1] < offsets[ix + 1][0]:
             #         predicted_text += ' '
             ss = offsets[pred_label_head][0]
-            ee = offsets[pred_label_tail - 1][1] + 1
+            ee = offsets[pred_label_tail - 1][1]
             predicted_text = text1[ss:ee].strip()
             if pospro['head_tail_1']:
                 raise NotImplementedError()
@@ -1540,10 +1687,52 @@ class r002HeadTailRunner(Runner):
             if pospro['regex_3']:
                 raise NotImplementedError()
             if pospro['magic']:
+                ee += 1
                 ee -= text[ss:ee].strip().count('   ')
                 ee += text[ss:ee].strip().count('  ')
-                if '  ' in text[:(ss+ee) // 2]:
+                if '  ' in text[:(ss + ee) // 2]:
                     predicted_text = text[ss:ee].strip()
+            if pospro['magic_2']:
+                original_text = text
+                y_start_char = ss
+                y_end_char = ee
+                y_selected_text = text1[y_start_char:y_end_char].strip()
+
+                if (len(y_selected_text) > 1 and y_end_char < len(text1) and
+                    y_selected_text[-1] == '.' and
+                    (text1[y_end_char] == '.' or
+                     y_selected_text[-2] == '.')):
+                    y_selected_text = re.sub(r'\.+$', '..', y_selected_text)
+                tmp = re.sub(
+                    r"([\\\*\+\.\?\{\}\(\)\[\]\^\$\|])",
+                    r"\\\g<0>",
+                    y_selected_text)
+                tmp = re.sub(r" ", " +", tmp)
+                m = re.search(tmp, original_text)
+                ss2 = m.start()
+                ee2 = m.end()
+                if '  ' in original_text[:(ss2 + ee2) // 2]:
+                    ss = y_start_char
+                    ee = y_end_char + 1
+                    if sentiment == 'neutral':
+                        ee += 1
+                    st = original_text[ss:ee].strip(' ')
+                    # re.sub(r' .$', '', st).strip('`')  # この一行追加
+                    y_selected_text = st
+                else:
+                    if (ee2 < len(original_text) -
+                            1 and original_text[ee2:ee2 + 2] in ('..', '!!', '??', '((', '))')):
+                        ee2 += 1
+                    # 先頭の空白分後退
+                    if original_text[0] == ' ':
+                        ss2 -= 1
+                    y_selected_text = original_text[ss2:ee2].strip(' ½')
+                if text1[:ee2 + 5] == " " + text[:ee2 +
+                                                 4] and sentiment != 'neutral':  # 簡単のため、長さが同じ場合に限定している
+                    y_selected_text = self.modify_punc_length(
+                        text, y_selected_text)
+                predicted_text = y_selected_text
+
             predicted_texts.append(predicted_text)
 
         return predicted_texts
@@ -2030,7 +2219,7 @@ class r002HeadTailRunner(Runner):
 #             pred_label_head = y_pred_head.argmax()
 #             pred_label_tail = (
 #                 pred_label_head +
-#                 y_pred_tail).round()[0].long()   # $B;M<N8^F~(B
+#                 y_pred_tail).round()[0].long()   # 四捨五入
 #             if pred_label_head > pred_label_tail or len(text.split()) < 2 \
 #                     or pred_label_tail >= len(input_ids):
 #                 predicted_text = text
@@ -2051,117 +2240,119 @@ class r002HeadTailRunner(Runner):
 #             predicted_texts.append(predicted_text)
 #
 #         return predicted_texts
-
-
-class r005HeadTailRunner(r002HeadTailRunner):
-    def _train_loop(self, model, optimizer, fobj,
-                    loader, warmup_batch, ema, accum_mod, use_specical_mask,
-                    fobj_segmentation, segmentation_loss_ratio,
-                    loss_weight_type, fobj_index_diff):
-        model.train()
-        running_loss = 0
-
-        softargmax1d = SoftArgmax1D(
-            beta=5., device=self.device).to(
-            self.device)
-
-        for batch_i, batch in enumerate(tqdm(loader)):
-            if warmup_batch > 0:
-                self._warmup(batch_i, warmup_batch, model)
-
-            input_ids = batch['input_ids'].to(self.device)
-            labels_head = batch['labels_head'].to(self.device)
-            labels_tail = batch['labels_tail'].to(self.device)
-            attention_mask = batch['attention_mask'].to(self.device)
-            special_tokens_mask = batch['special_tokens_mask'].to(self.device) \
-                if use_specical_mask else None
-
-            (logits, ) = model(
-                input_ids=input_ids,
-                attention_mask=attention_mask,
-                special_tokens_mask=special_tokens_mask,
-            )
-
-            # 5 is temerature
-            logits_head = logits[0]
-            logits_tail = logits[1]
-
-            if loss_weight_type == 'sel_len':
-                sel_len_weight = 1. * (
-                    1. / (labels_tail - labels_head).float())
-                train_losses_head = fobj(logits_head, labels_head)
-                train_loss = (train_losses_head * sel_len_weight).mean()
-                train_losses_tail = fobj(logits_tail, labels_tail)
-                train_loss += (train_losses_tail * sel_len_weight).mean()
-            elif loss_weight_type == 'sel_len_log':
-                sel_len_weight = 1. * (
-                    1. / (labels_tail - labels_head).float() / 10. + 2.71828).log()
-                # 1. / (labels_tail - labels_head).float() + 2.71828).log()
-                train_losses_head = fobj(logits_head, labels_head)
-                train_loss = (train_losses_head * sel_len_weight).mean()
-                train_losses_tail = fobj(logits_tail, labels_tail)
-                train_loss += (train_losses_tail * sel_len_weight).mean()
-            else:
-                train_loss = self.cfg_train['head_ratio'] * fobj(logits_head, labels_head)
-                train_loss += self.cfg_train['tail_ratio'] * fobj(logits_tail, labels_tail)
-
-            if fobj_segmentation:
-                labels_segmentation_head = batch['labels_segmentation_head']\
-                    .to(self.device)
-                labels_segmentation_tail = batch['labels_segmentation_tail']\
-                    .to(self.device)
-                # labels_segmentation_head_rev = batch['labels_segmentation_head_rev']\
-                #     .to(self.device)
-                # labels_segmentation_tail_rev = batch['labels_segmentation_tail_rev']\
-                #     .to(self.device)
-                logits_segmentation_head = logits[2]
-                logits_segmentation_tail = logits[3]
-                # logits_segmentation_head_rev = logits[4]
-                # logits_segmentation_tail_rev = logits[5]
-
-                if self.cfg_fobj_segmentation['fobj_type'] == 'lovasz':
-                    # train_loss = segmentation_loss_ratio * \
-                    train_loss += segmentation_loss_ratio * \
-                        fobj_segmentation(logits_segmentation_head,
-                                          labels_segmentation_head,
-                                          ignore=-1)  # , weights=1./labels_segmentation_head.sum(dim=1))
-                    train_loss += segmentation_loss_ratio * \
-                        fobj_segmentation(logits_segmentation_tail,
-                                          labels_segmentation_tail,
-                                          ignore=-1)  # , weights=1./labels_segmentation_tail.sum(dim=1))
-                    # train_loss += 0.5 * segmentation_loss_ratio * \
-                    #     fobj_segmentation(logits_segmentation_head_rev,
-                    #                       labels_segmentation_head_rev,
-                    #                       ignore=-1)
-                    # train_loss += 0.5 * segmentation_loss_ratio * \
-                    #     fobj_segmentation(logits_segmentation_tail_rev,
-                    #                       labels_segmentation_tail_rev,
-                    #                       ignore=-1)
-                else:
-                    raise NotImplementedError()
-
-            if fobj_index_diff:
-                pred_index_head = softargmax1d(logits_head)
-                pred_index_tail = softargmax1d(logits_tail)
-                pred_index_diff = pred_index_tail - pred_index_head
-                labels_index_diff = (labels_tail - labels_head).float()
-                train_loss += 0.0003 * fobj_index_diff(pred_index_diff,
-                                                       labels_index_diff)
-                # train_loss += 0.003 * fobj_index_diff(pred_index_head,
-                #                                       labels_head.float())
-                # train_loss += 0.003 * fobj_index_diff(pred_index_tail,
-                #                                       labels_tail.float())
-
-            train_loss.backward()
-
-            running_loss += train_loss.item()
-
-            if (batch_i + 1) % accum_mod == 0:
-                optimizer.step()
-                optimizer.zero_grad()
-
-                ema.on_batch_end(model)
-
-        train_loss = running_loss / len(loader)
-
-        return train_loss
+#
+#
+# class r005HeadTailRunner(r002HeadTailRunner):
+#     def _train_loop(self, model, optimizer, fobj,
+#                     loader, warmup_batch, ema, accum_mod, use_specical_mask,
+#                     fobj_segmentation, segmentation_loss_ratio,
+#                     loss_weight_type, fobj_index_diff):
+#         model.train()
+#         running_loss = 0
+#
+#         softargmax1d = SoftArgmax1D(
+#             beta=5., device=self.device).to(
+#             self.device)
+#
+#         for batch_i, batch in enumerate(tqdm(loader)):
+#             if warmup_batch > 0:
+#                 self._warmup(batch_i, warmup_batch, model)
+#
+#             input_ids = batch['input_ids'].to(self.device)
+#             labels_head = batch['labels_head'].to(self.device)
+#             labels_tail = batch['labels_tail'].to(self.device)
+#             attention_mask = batch['attention_mask'].to(self.device)
+#             special_tokens_mask = batch['special_tokens_mask'].to(self.device) \
+#                 if use_specical_mask else None
+#
+#             (logits, ) = model(
+#                 input_ids=input_ids,
+#                 attention_mask=attention_mask,
+#                 special_tokens_mask=special_tokens_mask,
+#             )
+#
+#             # 5 is temerature
+#             logits_head = logits[0]
+#             logits_tail = logits[1]
+#
+#             if loss_weight_type == 'sel_len':
+#                 sel_len_weight = 1. * (
+#                     1. / (labels_tail - labels_head).float())
+#                 train_losses_head = fobj(logits_head, labels_head)
+#                 train_loss = (train_losses_head * sel_len_weight).mean()
+#                 train_losses_tail = fobj(logits_tail, labels_tail)
+#                 train_loss += (train_losses_tail * sel_len_weight).mean()
+#             elif loss_weight_type == 'sel_len_log':
+#                 sel_len_weight = 1. * (
+#                     1. / (labels_tail - labels_head).float() / 10. + 2.71828).log()
+#                 # 1. / (labels_tail - labels_head).float() + 2.71828).log()
+#                 train_losses_head = fobj(logits_head, labels_head)
+#                 train_loss = (train_losses_head * sel_len_weight).mean()
+#                 train_losses_tail = fobj(logits_tail, labels_tail)
+#                 train_loss += (train_losses_tail * sel_len_weight).mean()
+#             else:
+#                 train_loss = self.cfg_train['head_ratio'] * \
+#                     fobj(logits_head, labels_head)
+#                 train_loss += self.cfg_train['tail_ratio'] * \
+#                     fobj(logits_tail, labels_tail)
+#
+#             if fobj_segmentation:
+#                 labels_segmentation_head = batch['labels_segmentation_head']\
+#                     .to(self.device)
+#                 labels_segmentation_tail = batch['labels_segmentation_tail']\
+#                     .to(self.device)
+#                 # labels_segmentation_head_rev = batch['labels_segmentation_head_rev']\
+#                 #     .to(self.device)
+#                 # labels_segmentation_tail_rev = batch['labels_segmentation_tail_rev']\
+#                 #     .to(self.device)
+#                 logits_segmentation_head = logits[2]
+#                 logits_segmentation_tail = logits[3]
+#                 # logits_segmentation_head_rev = logits[4]
+#                 # logits_segmentation_tail_rev = logits[5]
+#
+#                 if self.cfg_fobj_segmentation['fobj_type'] == 'lovasz':
+#                     # train_loss = segmentation_loss_ratio * \
+#                     train_loss += segmentation_loss_ratio * \
+#                         fobj_segmentation(logits_segmentation_head,
+#                                           labels_segmentation_head,
+#                                           ignore=-1)  # , weights=1./labels_segmentation_head.sum(dim=1))
+#                     train_loss += segmentation_loss_ratio * \
+#                         fobj_segmentation(logits_segmentation_tail,
+#                                           labels_segmentation_tail,
+#                                           ignore=-1)  # , weights=1./labels_segmentation_tail.sum(dim=1))
+#                     # train_loss += 0.5 * segmentation_loss_ratio * \
+#                     #     fobj_segmentation(logits_segmentation_head_rev,
+#                     #                       labels_segmentation_head_rev,
+#                     #                       ignore=-1)
+#                     # train_loss += 0.5 * segmentation_loss_ratio * \
+#                     #     fobj_segmentation(logits_segmentation_tail_rev,
+#                     #                       labels_segmentation_tail_rev,
+#                     #                       ignore=-1)
+#                 else:
+#                     raise NotImplementedError()
+#
+#             if fobj_index_diff:
+#                 pred_index_head = softargmax1d(logits_head)
+#                 pred_index_tail = softargmax1d(logits_tail)
+#                 pred_index_diff = pred_index_tail - pred_index_head
+#                 labels_index_diff = (labels_tail - labels_head).float()
+#                 train_loss += 0.0003 * fobj_index_diff(pred_index_diff,
+#                                                        labels_index_diff)
+#                 # train_loss += 0.003 * fobj_index_diff(pred_index_head,
+#                 #                                       labels_head.float())
+#                 # train_loss += 0.003 * fobj_index_diff(pred_index_tail,
+#                 #                                       labels_tail.float())
+#
+#             train_loss.backward()
+#
+#             running_loss += train_loss.item()
+#
+#             if (batch_i + 1) % accum_mod == 0:
+#                 optimizer.step()
+#                 optimizer.zero_grad()
+#
+#                 ema.on_batch_end(model)
+#
+#         train_loss = running_loss / len(loader)
+#
+#         return train_loss
