@@ -583,10 +583,11 @@ class Runner(object):
             )
         else:
             raise Exception(f'invalid model_type: {model_type}')
-        if self.device == 'cpu':
-            return model
-        else:
-            return torch.nn.DataParallel(model)
+        return model
+        # if self.device == 'cpu':
+        #     return model
+        # else:
+        #     return torch.nn.DataParallel(model)
 
     def _get_optimizer(self, optim_type, lr, model):
         if optim_type == 'sgd':
@@ -1104,7 +1105,7 @@ class r002HeadTailRunner(Runner):
             # build model and related objects
             # these objects have state
             model = self._get_model(**self.cfg_model)
-            module = model if self.device == 'cpu' else model.module
+            module = model  # if self.device == 'cpu' else model.module
             module.resize_token_embeddings(
                 len(tst_loader.dataset.tokenizer))  # for sentiment
 
