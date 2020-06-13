@@ -31,6 +31,8 @@ from tools.models import (
     RobertaModelWDualMultiClassClassifierAndCumsumSegmentationHead,
     RobertaModelWDualMultiClassClassifierAndCumsumSegmentationHeadV2,
     RobertaModelWDualMultiClassClassifierAndSegmentationHead,
+    RobertaModelWDualMultiClassClassifierAndSegmentationHeadV2,
+    RobertaModelWDualMultiClassClassifierAndSegmentationHeadV3,
     RobertaModelWDualMultiClassClassifierAndSegmentationHeadV4,
     RobertaModelWDualMultiClassClassifierAndSegmentationHeadV5,
     RobertaModelWDualMultiClassClassifierAndSegmentationHeadV6,
@@ -42,6 +44,7 @@ from tools.models import (
     RobertaModelWDualMultiClassClassifierAndSegmentationHeadV12,
     RobertaModelWDualMultiClassClassifierAndSegmentationHeadV13,
     RobertaModelWDualMultiClassClassifierAndSegmentationHeadV14,
+    RobertaModelWDualMultiClassClassifierAndSegmentationHeadV15,
     RobertaModelWDualMultiClassClassifierHead,
     RobertaModelWDualMultiClassClassifierHeadV2,
     RobertaModelWDualMultiClassClassifierHeadV3,
@@ -367,7 +370,7 @@ class Runner(object):
                     ema_model = model
                 use_offsets = self.cfg_predict['use_offsets']
                 val_loss, best_thresh, best_jaccard, val_textIDs, \
-                    val_input_ids, val_preds, val_labels = \
+                    val_input_ids, val_preds, val_labels, val_offsets = \
                     self._valid_loop(ema_model, fobj, val_loader,
                                      use_special_mask, use_offsets,
                                      self.cfg_train['loss_weight_type'],
@@ -402,7 +405,7 @@ class Runner(object):
                                       ema_model, optimizer, scheduler,
                                       # model, optimizer, scheduler,
                                       val_textIDs, val_input_ids, val_preds,
-                                      val_labels, val_loss,
+                                      val_labels, val_offsets, val_loss,
                                       best_thresh, best_jaccard)
 
             best_filename = self._search_best_filename(fold_num)
@@ -526,6 +529,16 @@ class Runner(object):
                 num_output_units,
                 pretrained_model_name_or_path
             )
+        elif model_type == 'roberta-headtail-segmentation-v2':
+            model = RobertaModelWDualMultiClassClassifierAndSegmentationHeadV4(
+                num_output_units,
+                pretrained_model_name_or_path
+            )
+        elif model_type == 'roberta-headtail-segmentation-v3':
+            model = RobertaModelWDualMultiClassClassifierAndSegmentationHeadV4(
+                num_output_units,
+                pretrained_model_name_or_path
+            )
         elif model_type == 'roberta-headtail-segmentation-v4':
             model = RobertaModelWDualMultiClassClassifierAndSegmentationHeadV4(
                 num_output_units,
@@ -578,6 +591,11 @@ class Runner(object):
             )
         elif model_type == 'roberta-headtail-segmentation-v14':
             model = RobertaModelWDualMultiClassClassifierAndSegmentationHeadV14(
+                num_output_units,
+                pretrained_model_name_or_path
+            )
+        elif model_type == 'roberta-headtail-segmentation-v15':
+            model = RobertaModelWDualMultiClassClassifierAndSegmentationHeadV15(
                 num_output_units,
                 pretrained_model_name_or_path
             )
@@ -753,7 +771,8 @@ class Runner(object):
 
     def _save_checkpoint(self, fold_num, current_epoch,
                          model, optimizer, scheduler,
-                         val_textIDs, val_input_ids, val_preds, val_labels,
+                         val_textIDs, val_input_ids, val_preds,
+                         val_labels, val_offsets,
                          val_loss, best_thresh, best_jaccard):
         if not os.path.exists(f'./checkpoints/{self.exp_id}/{fold_num}'):
             os.makedirs(f'./checkpoints/{self.exp_id}/{fold_num}')
@@ -773,6 +792,7 @@ class Runner(object):
             'val_input_ids': val_input_ids,
             'val_preds': val_preds,
             'val_labels': val_labels,
+            'val_offsets': val_offsets,
             'histories': self.histories,
         }
         self.logger.info(f'now saving checkpoint to {cp_filename} ...')
@@ -1261,6 +1281,10 @@ class r002HeadTailRunner(Runner):
                 # train_loss += 0.003 * fobj_index_diff(pred_index_tail,
                 #                                       labels_tail.float())
 
+            if self.cfg_train['head_tail_regularization']:
+                diff = model.module.classifier_conv_head.weight - model.module.classifier_conv_tail.weight
+                train_loss += (diff ** 2).sum()
+
             if use_dist_loss:
                 # train_loss += dist_loss(logits_head, logits_tail,
                 #                         labels_tail, labels_tail,
@@ -1423,7 +1447,7 @@ class r002HeadTailRunner(Runner):
         valid_labels = (valid_labels_head, valid_labels_tail)
 
         return valid_loss, best_thresh, best_jaccard, valid_textIDs, \
-            valid_input_ids, valid_preds, valid_labels
+            valid_input_ids, valid_preds, valid_labels, valid_offsets
 
     # def _calc_jaccard(self, input_ids, labels_head, labels_tail,
     #                  y_preds_head, y_preds_tail, tokenizer, thresh_unit):

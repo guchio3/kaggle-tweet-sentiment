@@ -25,6 +25,7 @@ dataset:
     tokenize_period: false
     tail_index: natural
     use_magic: false
+    tkm_annot: false
 model:
     model_type: roberta-headtail
     pretrained_model_name_or_path: roberta-base
@@ -56,6 +57,7 @@ train:
     ema_level: batch
     ema_n: 0  # < 1 means no ema
     accum_mod: 1
+    head_tail_regularization: false
     use_special_mask: false
     use_offsets: false
     head_ratio: 1

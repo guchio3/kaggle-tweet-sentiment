@@ -14,7 +14,7 @@ loader:
     dataset_type: tse_headtail_segmentation_dataset_v3
 dataset:
     tokenizer_type: roberta_bytelevel_bpe
-    pretrained_model_name_or_path: ./inputs/datasets/
+    pretrained_model_name_or_path: ./inputs/datasets/tokenizer_bases/
     do_lower_case: true
     add_pair_prefix_space: false
     max_length: 125

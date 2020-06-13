@@ -1,5 +1,6 @@
 import re
 from abc import abstractmethod
+import pandas as pd
 
 import numpy as np
 
@@ -52,12 +53,20 @@ class TSEDataset(Dataset):
                  do_lower_case, max_length, df,
                  logger=None, debug=False, add_pair_prefix_space=True,
                  tokenize_period=False, tail_index='natural',
-                 use_magic=False):
+                 use_magic=False, tkm_annot=False):
         self.mode = mode
         self.add_pair_prefix_space = add_pair_prefix_space
         self.tokenize_period = tokenize_period
         self.tail_index = tail_index
         self.use_magic = use_magic
+        if tkm_annot and mode == 'train':
+            df_tkm_st = pd.read_csv('./inputs/datasets/tkm_annot/tkm_annotated.csv')
+            map_tkm_st = df_tkm_st.to_dict()['tkm_selected_text']
+            map_tkm_st['22f06df70a'] = 'i wish'
+            map_tkm_st['0565804d90'] = ' one day my hugs will come    *fingers still crossed*'
+            self.map_tkm_st = map_tkm_st
+        else:
+            self.map_tkm_st = {}
         if tokenizer_type == 'bert':
             self.tokenizer = BertTokenizer\
                 .from_pretrained(
@@ -484,6 +493,8 @@ class TSEHeadTailDatasetV3(TSEDataset):
                     sel = sel[:-2]
                 selected_text = sel
             row['fixed_selected_text'] = selected_text
+            if row['textID'] in self.map_tkm_st:
+                selected_text = self.map_tkm_st[row['textID']]
         else:
             selected_text = row['selected_text']
 
