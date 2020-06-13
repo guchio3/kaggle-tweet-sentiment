@@ -1150,7 +1150,7 @@ class RobertaModelWDualMultiClassClassifierAndSegmentationHeadV2(RobertaModelWDu
 
 class RobertaModelWDualMultiClassClassifierAndSegmentationHeadV3(RobertaModelWDualMultiClassClassifierHeadV3):
     def __init__(self, num_labels, pretrained_model_name_or_path):
-        super().__init__()
+        super().__init__(num_labels, pretrained_model_name_or_path)
         if pretrained_model_name_or_path:
             if isinstance(pretrained_model_name_or_path, str):
                 self.model = RobertaModel.from_pretrained(
