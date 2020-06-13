@@ -530,12 +530,12 @@ class Runner(object):
                 pretrained_model_name_or_path
             )
         elif model_type == 'roberta-headtail-segmentation-v2':
-            model = RobertaModelWDualMultiClassClassifierAndSegmentationHeadV4(
+            model = RobertaModelWDualMultiClassClassifierAndSegmentationHeadV2(
                 num_output_units,
                 pretrained_model_name_or_path
             )
         elif model_type == 'roberta-headtail-segmentation-v3':
-            model = RobertaModelWDualMultiClassClassifierAndSegmentationHeadV4(
+            model = RobertaModelWDualMultiClassClassifierAndSegmentationHeadV3(
                 num_output_units,
                 pretrained_model_name_or_path
             )
