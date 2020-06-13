@@ -542,8 +542,8 @@ class RobertaModelWDualMultiClassClassifierHeadV3(nn.Module):
             else:
                 # for sub
                 self.model = RobertaModel(
-                    pretrained_model_name_or_path,
-                    output_hidden_states=True)
+                    pretrained_model_name_or_path,)
+                    # output_hidden_states=True)
         else:
             raise NotImplementedError
         self.num_labels = num_labels
@@ -692,8 +692,8 @@ class RobertaModelWDualMultiClassClassifierHeadV5(nn.Module):
             else:
                 # for sub
                 self.model = RobertaModel(
-                    pretrained_model_name_or_path,
-                    output_hidden_states=True)
+                    pretrained_model_name_or_path,)
+                    # output_hidden_states=True)
         else:
             raise NotImplementedError
         self.num_labels = num_labels
@@ -1159,8 +1159,8 @@ class RobertaModelWDualMultiClassClassifierAndSegmentationHeadV3(RobertaModelWDu
             else:
                 # for sub
                 self.model = RobertaModel(
-                    pretrained_model_name_or_path,
-                    output_hidden_states=True)
+                    pretrained_model_name_or_path,)
+                    # output_hidden_states=True)
         else:
             raise NotImplementedError
         self.num_labels = num_labels
