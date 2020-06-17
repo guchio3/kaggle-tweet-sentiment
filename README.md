@@ -1,4 +1,4 @@
-## kaggle-tweet-sentiment
+## A part of 5th place solution in [kaggle-tweet-sentiment](https://www.kaggle.com/c/tweet-sentiment-extraction/leaderboard)
 
 ## usage
  1. run commands
